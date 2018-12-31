@@ -1,4 +1,4 @@
-#include "vulkanhpp/spock_api_schema_builder.h"
+#include "sps/spock_api_schema_builder.h"
 
 #include <glog/logging.h>
 #include <cctype>

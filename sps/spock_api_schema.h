@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vulkanhpp/vulkan_api_schema.h"
+#include "vks/vulkan_api_schema.h"
 
 namespace sps {
 

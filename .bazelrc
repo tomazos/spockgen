@@ -1,0 +1,10 @@
+build --cxxopt='-std=c++17'
+build --copt='-Wall'
+build --copt='-Werror'
+build --copt='-Wimplicit-fallthrough'
+build --host_cxxopt='-std=c++17'
+build --host_copt='-Wall'
+build --host_copt='-Werror'
+build --host_copt='-Wimplicit-fallthrough'
+
+

@@ -5,7 +5,7 @@
 
 #include "dvc/container.h"
 #include "dvc/string.h"
-#include "vulkanhpp/minic_parser.h"
+#include "mnc/minic_parser.h"
 
 namespace {
 

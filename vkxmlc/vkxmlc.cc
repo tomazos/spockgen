@@ -8,11 +8,11 @@
 #include "dvc/file.h"
 #include "dvc/string.h"
 
-#include "vulkanhpp/spock_api_schema.h"
-#include "vulkanhpp/spock_api_schema_builder.h"
-#include "vulkanhpp/vulkan_api_schema.h"
-#include "vulkanhpp/vulkan_api_schema_parser.h"
-#include "vulkanhpp/vulkan_relaxng.h"
+#include "sps/spock_api_schema.h"
+#include "sps/spock_api_schema_builder.h"
+#include "vks/vulkan_api_schema.h"
+#include "vks/vulkan_api_schema_parser.h"
+#include "vks/vulkan_relaxng.h"
 
 DEFINE_string(vkxml, "", "Input vk.xml file");
 DEFINE_string(outjson, "", "Output AST to json");
@@ -22,7 +22,7 @@ DEFINE_string(outh, "", "Output C++ header");
 void write_test(const vks::Registry& registry) {
   dvc::file_writer test(FLAGS_outtest, dvc::truncate);
 
-  test.println("#include \"vulkanhpp/vkxmltest.h\"");
+  test.println("#include \"test/vkxmltest.h\"");
 
   test.println("//enums");
 
@@ -206,7 +206,9 @@ int main(int argc, char** argv) {
 
   if (!FLAGS_outtest.empty()) write_test(vksregistry);
 
-  sps::Registry spsregistry = build_spock_registry(vksregistry);
+  if (!FLAGS_outh.empty()) {
+    sps::Registry spsregistry = build_spock_registry(vksregistry);
 
-  if (!FLAGS_outh.empty()) write_header(spsregistry);
+    write_header(spsregistry);
+  }
 }
