@@ -96,6 +96,10 @@ std::string translate_command_name(const std::string& name) {
   return to_underscore_style(split_identifier_view(name.substr(2)));
 }
 
+std::string translate_member_name(const std::string& name) {
+  return to_underscore_style(split_identifier_view(name));
+}
+
 std::string common_prefix(const std::vector<std::string>& names) {
   CHECK_GT(names.size(), 1);
   for (size_t i = 0; i <= names[0].size(); i++) {
@@ -164,7 +168,7 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
               [](auto a, auto b) { return a->name < b->name; });
   };
 
-  std::unordered_set<const vks::Enumeration*> used_enums;
+  std::unordered_map<const vks::Enumeration*, const sps::Bitmask*> flag_bits;
 
   for (const auto& [name, vbitmask] : vreg.bitmasks) {
     if (name != vbitmask->name) continue;
@@ -172,7 +176,7 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
     bitmask->name = translate_bitmask_name(name);
     bitmask->bitmask = vbitmask;
     if (vbitmask->requires) {
-      used_enums.insert(vbitmask->requires);
+      dvc::insert_or_die(flag_bits, vbitmask->requires, bitmask);
       sps::Enumeration* enumeration =
           convert_enumeration(name, vbitmask->requires);
       for (sps::Enumerator enumerator : enumeration->enumerators) {
@@ -191,13 +195,22 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
     sreg.bitmasks.push_back(bitmask);
   }
   sort_on_name(sreg.bitmasks);
+  std::unordered_map<const vks::Bitmask*, sps::Bitmask*> bitmask_map;
+  for (auto bitmask : sreg.bitmasks) {
+    dvc::insert_or_die(bitmask_map, bitmask->bitmask, bitmask);
+  }
 
   for (const auto& [name, venumeration] : vreg.enumerations) {
-    if (used_enums.count(venumeration)) continue;
+    if (flag_bits.count(venumeration)) continue;
     if (name != venumeration->name) continue;
     sreg.enumerations.push_back(convert_enumeration(name, venumeration));
   }
   sort_on_name(sreg.enumerations);
+  std::unordered_map<const vks::Enumeration*, sps::Enumeration*>
+      enumeration_map;
+  for (auto enumeration : sreg.enumerations) {
+    dvc::insert_or_die(enumeration_map, enumeration->enumeration, enumeration);
+  }
 
   for (const auto& [name, vconstant] : vreg.constants) {
     if (constants_done.count(vconstant)) continue;
@@ -232,9 +245,55 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
     auto sstruct = new sps::Struct;
     sstruct->name = translate_struct_name(name);
     sstruct->struct_ = vstruct;
-    //    for (const vks::StructMember& member : vstruct->members) {
-    //
-    //    }
+    for (size_t member_idx = 0; member_idx < vstruct->members.size();
+         member_idx++) {
+      const vks::Member& member = vstruct->members.at(member_idx);
+      std::string accessor_name = translate_member_name(member.name);
+      // sps::Accessor* accessor = nullptr;
+      if (auto tname = dynamic_cast<const vks::Name*>(member.type)) {
+        if (auto external = dynamic_cast<const vks::External*>(tname->entity)) {
+          std::string ename = external->name;
+          if (ename == "VkBool32") {
+            auto sb = new sps::SingularBool;
+            sb->name = accessor_name;
+            sb->member_idx = member_idx;
+            sstruct->accessors.push_back(sb);
+          } else {
+            if (ename == "VkDeviceSize") ename = "uint64_t";
+            auto sn = new sps::SingularNumeric;
+            sn->name = accessor_name;
+            sn->member_idx = member_idx;
+            sn->type = ename;
+            sstruct->accessors.push_back(sn);
+          }
+        } else if (auto bitmask =
+                       dynamic_cast<const vks::Bitmask*>(tname->entity)) {
+          auto sb = new sps::SingularBitmask;
+          sb->name = accessor_name;
+          sb->member_idx = member_idx;
+          CHECK(bitmask_map.count(bitmask)) << bitmask->name;
+          sb->bitmask = bitmask_map.at(bitmask);
+          sstruct->accessors.push_back(sb);
+        } else if (auto enumeration =
+                       dynamic_cast<const vks::Enumeration*>(tname->entity)) {
+          if (flag_bits.count(enumeration)) {
+            auto sb = new sps::SingularBitmask;
+            sb->name = accessor_name;
+            sb->member_idx = member_idx;
+            sb->bitmask = flag_bits.at(enumeration);
+            sb->flag_bits = true;
+            sstruct->accessors.push_back(sb);
+          } else {
+            auto se = new sps::SingularEnumeration;
+            se->name = accessor_name;
+            se->member_idx = member_idx;
+            CHECK(enumeration_map.count(enumeration)) << enumeration->name;
+            se->enumeration = enumeration_map.at(enumeration);
+            sstruct->accessors.push_back(se);
+          }
+        }
+      }
+    }
 
     for (const auto& [aname, alias] : vreg.structs) {
       if (vstruct == alias && aname != alias->name) {

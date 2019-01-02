@@ -90,9 +90,12 @@ void write_header(const sps::Registry& registry) {
 
   h.println("#pragma once");
   h.println();
+  h.println("#include <type_traits>");
   h.println("#include <vulkan/vulkan.h>");
   h.println();
   h.println("namespace spk {");
+  h.println();
+  h.println("static_assert(std::is_same_v<VkDeviceSize, uint64_t>);");
   h.println();
 
   for (const sps::Bitmask* bitmask : registry.bitmasks) {
@@ -168,9 +171,96 @@ void write_header(const sps::Registry& registry) {
   for (const auto& struct_ : registry.structs) {
     if (struct_->struct_->platform)
       h.println("#ifdef ", struct_->struct_->platform->protect);
-    h.println("// struct ", struct_->struct_->name);
-    h.println("struct ", struct_->name, " {");
+    std::string keyword = (struct_->struct_->is_union ? "union" : "struct");
+    h.println(keyword, " ", struct_->name, " {");
+    auto member_name = [&](size_t member_idx) {
+      return struct_->struct_->members.at(member_idx).name + "_";
+    };
     h.println("  using underlying_type = ", struct_->struct_->name, ";");
+    h.println();
+
+    for (bool mutator : {true, false}) {
+      if (mutator) {
+        h.println("  // mutators");
+      } else {
+        h.println("  // accessors");
+      }
+
+      for (const auto& accessor : struct_->accessors) {
+        if (auto singular_bool =
+                dynamic_cast<const sps::SingularBool*>(accessor)) {
+          std::string aname = singular_bool->name;
+          std::string mname = member_name(singular_bool->member_idx);
+          if (mutator) {
+            h.println("  void set_", aname, "(bool value) { ", mname,
+                      " = VkBool32(value); }");
+
+          } else {
+            h.println("  bool ", aname, "() const { return bool(", mname,
+                      ");}");
+          }
+        } else if (auto singular_numeric =
+                       dynamic_cast<const sps::SingularNumeric*>(accessor)) {
+          std::string aname = singular_numeric->name;
+          std::string mname = member_name(singular_numeric->member_idx);
+          std::string type = singular_numeric->type;
+          if (mutator) {
+            h.println("  void set_", aname, "(", type, " value) { ", mname,
+                      " = value; }");
+          } else {
+            h.println("  ", type, " ", aname, "() const { return ", mname,
+                      ";}");
+          }
+        } else if (auto singular_enumeration =
+                       dynamic_cast<const sps::SingularEnumeration*>(
+                           accessor)) {
+          std::string aname = singular_enumeration->name;
+          std::string mname = member_name(singular_enumeration->member_idx);
+          std::string atype = "spk::" + singular_enumeration->enumeration->name;
+          std::string mtype =
+              singular_enumeration->enumeration->enumeration->name;
+
+          if (mutator) {
+            h.println("  void set_", aname, "(", atype, " value) { ", mname,
+                      " = ", mtype, "(value); }");
+          } else {
+            h.println("  ", atype, " ", aname, "() const { return ", atype, "(",
+                      mname, ");}");
+          }
+        } else if (auto singular_bitmask =
+                       dynamic_cast<const sps::SingularBitmask*>(accessor)) {
+          std::string aname = singular_bitmask->name;
+          std::string mname = member_name(singular_bitmask->member_idx);
+          std::string atype = "spk::" + singular_bitmask->bitmask->name;
+          std::string mtype =
+              (singular_bitmask->flag_bits
+                   ? struct_->struct_->members.at(singular_bitmask->member_idx)
+                         .type->to_string()
+                   : singular_bitmask->bitmask->bitmask->name);
+
+          if (mutator) {
+            h.println("  void set_", aname, "(", atype, " value) { ", mname,
+                      " = ", mtype, "(value); }");
+          } else {
+            h.println("  ", atype, " ", aname, "() const { return ", atype, "(",
+                      mname, ");}");
+          }
+        } else {
+          LOG(FATAL) << "Unknown Accessor subclass " << typeid(accessor).name();
+        }
+      }
+      h.println();
+    }
+    h.println(" private:");
+    if (struct_->struct_->structured_type) {
+      h.println("  VkStructureType s_type_ = ",
+                struct_->struct_->structured_type->name, ";");
+      h.println("  void* p_next_ = nullptr;");
+      h.println();
+    }
+    for (const auto& member : struct_->struct_->members)
+      h.println("  ", member.type->make_declaration(member.name + "_"), ";",
+                (member.len ? "// len=" + member.len.value() : ""));
     h.println("};");
     for (const auto& alias : struct_->aliases) {
       h.println("using ", alias, " = ", struct_->name, ";");

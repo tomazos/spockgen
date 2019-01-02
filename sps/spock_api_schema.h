@@ -36,9 +36,36 @@ struct Handle : Entity {
   std::vector<Command*> commands;
 };
 
+struct Accessor {
+  std::string name;
+
+  virtual ~Accessor() = default;
+};
+
+struct SingularAccessor : Accessor {
+  size_t member_idx;
+};
+
+struct SingularBool : SingularAccessor {
+};
+
+struct SingularNumeric : SingularAccessor {
+  std::string type;
+};
+
+struct SingularEnumeration : SingularAccessor {
+  const Enumeration* enumeration;
+};
+
+struct SingularBitmask : SingularAccessor {
+  const Bitmask* bitmask;
+  bool flag_bits = false;
+};
+
 struct Struct : Entity {
   const vks::Struct* struct_;
   std::vector<std::string> aliases;
+  std::vector<Accessor*> accessors;
 };
 
 struct Command : Entity {

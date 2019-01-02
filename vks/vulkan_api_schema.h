@@ -4,7 +4,9 @@
 #include <unordered_map>
 #include <vector>
 #include <unordered_set>
+#include <optional>
 #include <sstream>
+#include <string_view>
 
 namespace vks {
 
@@ -16,6 +18,9 @@ struct Entity {
 
 struct Type {
   virtual std::string to_string() const = 0;
+  virtual std::string make_declaration(const std::string& id) const {
+      return to_string() + " " + id;
+  }
   virtual ~Type() = default;
 };
 
@@ -65,6 +70,10 @@ struct Array : Type {
   std::string to_string() const override {
     return T->to_string() + " [" + N->to_string() + "]";
   };
+  virtual std::string make_declaration(const std::string& id) const {
+    return T->make_declaration(id) + "[" + N->to_string() + "]";
+  }
+
 };
 
 struct External : Entity {
@@ -97,14 +106,16 @@ struct Handle : Entity {
 struct Member {
   std::string name;
   Type* type;
+  std::optional<std::string> len;
 };
 
 struct Struct : Entity {
   bool is_union;
   bool returnedonly;
-  std::vector<const Struct*> structextends;
   const Platform* platform = nullptr;
   std::vector<Member> members;
+  const Constant* structured_type = nullptr;
+  std::vector<const Struct*> structextends;
 };
 
 struct FunctionPrototypeParam {

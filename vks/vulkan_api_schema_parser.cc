@@ -374,11 +374,27 @@ void parse_structs(vks::Registry& registry, TypeBackpatches& backpatches,
     vks::Struct* struct_ = registry.structs.at(name);
     for (size_t member_idx = 0; member_idx < type.member.size(); member_idx++) {
       const vkr::Type_member& member_in = type.member.at(member_idx);
-      if (member_in.values) {
-        CHECK(member_idx == 0);
-      }
       vks::Member member_out;
       member_out.name = member_in.name;
+      if (member_in.values) {
+        CHECK(member_idx == 0);
+        CHECK(member_in.name == "sType");
+        CHECK(member_in.type == "VkStructureType");
+        CHECK(type.member.at(1).name == "pNext");
+        if (registry.constants.count(member_in.values.value())) {
+          struct_->structured_type =
+              registry.constants.at(member_in.values.value());
+          member_idx++;
+          continue;
+        }
+      }
+      if (member_in.altlen) {
+        CHECK(member_in.len);
+      }
+      if (member_in.len) {
+        member_out.len = member_in.len;
+      }
+
       mnc::Declaration decl =
           mnc::parse_declaration(parse_inner_text(member_in._element_));
       CHECK_EQ(member_in.name, decl.name);
