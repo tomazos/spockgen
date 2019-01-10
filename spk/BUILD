@@ -29,6 +29,7 @@ genrule(
 cc_library(
   name = "spock",
   hdrs = [
+    "spock_fwd.h",
     "spock.h",
   ],
 )

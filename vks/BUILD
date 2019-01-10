@@ -25,23 +25,23 @@ cc_library(
 )
 
 cc_library(
-   name = "vulkan_api_schema",
+   name = "vks",
    hdrs = [
-     "vulkan_api_schema.h",
+     "vks.h",
    ],
 )
 
 cc_library(
-  name = "vulkan_api_schema_parser",
+  name = "vksparser",
   hdrs = [
-    "vulkan_api_schema_parser.h",
+    "vksparser.h",
   ],
   srcs = [
-    "vulkan_api_schema_parser.cc",
+    "vksparser.cc",
   ],
   deps = [
     ":vulkan_relaxng",
-    ":vulkan_api_schema",
+    ":vks",
     "//mnc:minic_parser",
     "//dvc:container",
     "//dvc:string",

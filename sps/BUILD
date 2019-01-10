@@ -1,25 +1,27 @@
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
-  name = "spock_api_schema",
+  name = "sps",
   hdrs = [
-    "spock_api_schema.h",
+    "sps.h",
   ],
   deps = [
-     "//vks:vulkan_api_schema",
+     "//vks",
   ],
 )
 
 cc_library(
-  name = "spock_api_schema_builder",
+  name = "spsbuilder",
   hdrs = [
-    "spock_api_schema_builder.h",
+    "spsbuilder.h",
+    "spsaccessors.h",
   ],
   srcs = [
-    "spock_api_schema_builder.cc",
+    "spsbuilder.cc",
+    "spsaccessors.cc",
   ],
   deps = [
-     ":spock_api_schema",
+     ":sps",
      "//dvc:container",
      "//dvc:string",
   ],

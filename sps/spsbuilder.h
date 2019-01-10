@@ -1,6 +1,5 @@
 #pragma once
 
-#include "sps/spock_api_schema.h"
+#include "sps/sps.h"
 
 sps::Registry build_spock_registry(const vks::Registry& registry);
-

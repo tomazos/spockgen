@@ -10,7 +10,7 @@ class loader {
  public:
   loader();
 
-  template<typename PFN>
+  template <typename PFN>
   PFN get_instance_proc_addr(VkInstance instance, const char* pName);
 
  private:
@@ -21,9 +21,9 @@ class loader {
   PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
 };
 
-template<typename PFN>
+template <typename PFN>
 PFN loader::get_instance_proc_addr(VkInstance instance, const char* pName) {
-  return (PFN) vkGetInstanceProcAddr(instance, pName);
+  return (PFN)vkGetInstanceProcAddr(instance, pName);
 }
 
 struct global_dispatch_table {
@@ -31,7 +31,8 @@ struct global_dispatch_table {
 
   PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties;
   PFN_vkCreateInstance vkCreateInstance;
-  PFN_vkEnumerateInstanceExtensionProperties vkEnumerateInstanceExtensionProperties;
+  PFN_vkEnumerateInstanceExtensionProperties
+      vkEnumerateInstanceExtensionProperties;
   PFN_vkEnumerateInstanceVersion vkEnumerateInstanceVersion;
 };
 

@@ -1,4 +1,4 @@
-#include "sps/spock_api_schema_builder.h"
+#include "sps/spsbuilder.h"
 
 #include <glog/logging.h>
 #include <cctype>
@@ -7,6 +7,7 @@
 
 #include "dvc/container.h"
 #include "dvc/string.h"
+#include "sps/spsaccessors.h"
 
 namespace {
 
@@ -27,6 +28,11 @@ std::vector<std::string_view> split_identifier_view(
     charkind a = to_charkind(identifier[i]);
     charkind b = to_charkind(identifier[i + 1]);
     if (a == lowercase && b == uppercase)
+      poses.push_back(i + 1);
+    else if (a == lowercase && b == digit) {
+      poses.push_back(i + 1);
+    } else if (a == uppercase && b == uppercase && i + 2 < identifier.size() &&
+               to_charkind(identifier[i + 2]) == lowercase)
       poses.push_back(i + 1);
     else if (a == underscore) {
       poses.push_back(i);
@@ -91,10 +97,10 @@ std::string translate_enumerator_name(const std::string& name) {
   return to_underscore_style(split_identifier_view(name.substr(3)));
 }
 
-std::string translate_command_name(const std::string& name) {
-  CHECK(name.substr(0, 2) == "vk") << name;
-  return to_underscore_style(split_identifier_view(name.substr(2)));
-}
+// std::string translate_command_name(const std::string& name) {
+//  CHECK(name.substr(0, 2) == "vk") << name;
+//  return to_underscore_style(split_identifier_view(name.substr(2)));
+//}
 
 std::string translate_member_name(const std::string& name) {
   return to_underscore_style(split_identifier_view(name));
@@ -123,10 +129,75 @@ std::string final_enum_fix(const std::string id) {
   return id;
 }
 
+const vks::Type* translate_member_type(const vks::Registry& vreg,
+                                       const sps::Registry& sreg,
+                                       const vks::Type* vtype) {
+  if (auto name = dynamic_cast<const vks::Name*>(vtype)) {
+    const sps::Entity* entity = nullptr;
+    if (auto handle = dynamic_cast<const vks::Handle*>(name->entity)) {
+      entity = sreg.handle_map.at(handle);
+    } else if (auto bitmask = dynamic_cast<vks::Bitmask*>(name->entity)) {
+      entity = sreg.bitmask_map.at(bitmask);
+    } else if (auto enumeration =
+                   dynamic_cast<vks::Enumeration*>(name->entity)) {
+      if (sreg.flag_bits_map.count(enumeration))
+        entity = sreg.flag_bits_map.at(enumeration);
+      else
+        entity = sreg.enumeration_map.at(enumeration);
+    } else if (auto struct_ = dynamic_cast<vks::Struct*>(name->entity)) {
+      entity = sreg.struct_map.at(struct_);
+    } else if (auto external = dynamic_cast<vks::External*>(name->entity)) {
+      if (external->name == "VkDeviceSize") {
+        auto uint64_entity = new vks::External;
+        uint64_entity->name = "uint64_t";
+        auto uint64_name = new vks::Name;
+        uint64_name->entity = uint64_entity;
+        return uint64_name;
+      } else if (external->name == "VkBool32") {
+        auto bool32_entity = new vks::External;
+        bool32_entity->name = "spk::bool32_t";
+        auto bool32_name = new vks::Name;
+        bool32_name->entity = bool32_entity;
+        return bool32_name;
+      } else {
+        return name;
+      }
+    } else if (dynamic_cast<vks::FunctionPrototype*>(name->entity)) {
+      return name;
+    } else {
+      LOG(FATAL) << "Unknown entity sublass: " << typeid(*name->entity).name();
+    }
+
+    if (entity != nullptr) {
+      auto T = new sps::Name;
+      T->entity = entity;
+      return T;
+    } else {
+      return name;
+    }
+  } else if (auto pointer = dynamic_cast<const vks::Pointer*>(vtype)) {
+    auto T = new vks::Pointer;
+    T->T = translate_member_type(vreg, sreg, pointer->T);
+    return T;
+  } else if (auto const_ = dynamic_cast<const vks::Const*>(vtype)) {
+    auto T = new vks::Const;
+    T->T = translate_member_type(vreg, sreg, const_->T);
+    return T;
+  } else if (auto array = dynamic_cast<const vks::Array*>(vtype)) {
+    auto T = new vks::Array;
+    T->N = array->N;
+    T->T = translate_member_type(vreg, sreg, array->T);
+    return T;
+  } else {
+    LOG(FATAL) << "unknown vks::Type* subclass: " << typeid(*vtype).name();
+  }
+}
+
 }  // namespace
 
 sps::Registry build_spock_registry(const vks::Registry& vreg) {
   sps::Registry sreg;
+  sreg.vreg = &vreg;
 
   std::unordered_set<const vks::Constant*> constants_done;
 
@@ -168,15 +239,13 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
               [](auto a, auto b) { return a->name < b->name; });
   };
 
-  std::unordered_map<const vks::Enumeration*, const sps::Bitmask*> flag_bits;
-
   for (const auto& [name, vbitmask] : vreg.bitmasks) {
     if (name != vbitmask->name) continue;
     sps::Bitmask* bitmask = new sps::Bitmask;
     bitmask->name = translate_bitmask_name(name);
     bitmask->bitmask = vbitmask;
     if (vbitmask->requires) {
-      dvc::insert_or_die(flag_bits, vbitmask->requires, bitmask);
+      dvc::insert_or_die(sreg.flag_bits_map, vbitmask->requires, bitmask);
       sps::Enumeration* enumeration =
           convert_enumeration(name, vbitmask->requires);
       for (sps::Enumerator enumerator : enumeration->enumerators) {
@@ -194,22 +263,24 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
     }
     sreg.bitmasks.push_back(bitmask);
   }
+
   sort_on_name(sreg.bitmasks);
-  std::unordered_map<const vks::Bitmask*, sps::Bitmask*> bitmask_map;
+
   for (auto bitmask : sreg.bitmasks) {
-    dvc::insert_or_die(bitmask_map, bitmask->bitmask, bitmask);
+    dvc::insert_or_die(sreg.bitmask_map, bitmask->bitmask, bitmask);
   }
 
   for (const auto& [name, venumeration] : vreg.enumerations) {
-    if (flag_bits.count(venumeration)) continue;
+    if (sreg.flag_bits_map.count(venumeration)) continue;
     if (name != venumeration->name) continue;
     sreg.enumerations.push_back(convert_enumeration(name, venumeration));
   }
+
   sort_on_name(sreg.enumerations);
-  std::unordered_map<const vks::Enumeration*, sps::Enumeration*>
-      enumeration_map;
+
   for (auto enumeration : sreg.enumerations) {
-    dvc::insert_or_die(enumeration_map, enumeration->enumeration, enumeration);
+    dvc::insert_or_die(sreg.enumeration_map, enumeration->enumeration,
+                       enumeration);
   }
 
   for (const auto& [name, vconstant] : vreg.constants) {
@@ -225,7 +296,8 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
   for (const auto& [name, vhandle] : vreg.handles) {
     if (name != vhandle->name) continue;
     auto shandle = new sps::Handle;
-    shandle->name = translate_handle_name(name);
+    shandle->name = translate_handle_name(name) + "_ref";
+    shandle->fullname = translate_handle_name(name);
     shandle->handle = vhandle;
     for (const auto& [aname, alias] : vreg.handles) {
       if (vhandle == alias && aname != alias->name) {
@@ -235,9 +307,9 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
     sreg.handles.push_back(shandle);
   }
   sort_on_name(sreg.handles);
-  std::unordered_map<const vks::Handle*, sps::Handle*> handle_map;
+
   for (auto handle : sreg.handles) {
-    dvc::insert_or_die(handle_map, handle->handle, handle);
+    dvc::insert_or_die(sreg.handle_map, handle->handle, handle);
   }
 
   for (const auto& [name, vstruct] : vreg.structs) {
@@ -247,52 +319,17 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
     sstruct->struct_ = vstruct;
     for (size_t member_idx = 0; member_idx < vstruct->members.size();
          member_idx++) {
-      const vks::Member& member = vstruct->members.at(member_idx);
-      std::string accessor_name = translate_member_name(member.name);
-      // sps::Accessor* accessor = nullptr;
-      if (auto tname = dynamic_cast<const vks::Name*>(member.type)) {
-        if (auto external = dynamic_cast<const vks::External*>(tname->entity)) {
-          std::string ename = external->name;
-          if (ename == "VkBool32") {
-            auto sb = new sps::SingularBool;
-            sb->name = accessor_name;
-            sb->member_idx = member_idx;
-            sstruct->accessors.push_back(sb);
-          } else {
-            if (ename == "VkDeviceSize") ename = "uint64_t";
-            auto sn = new sps::SingularNumeric;
-            sn->name = accessor_name;
-            sn->member_idx = member_idx;
-            sn->type = ename;
-            sstruct->accessors.push_back(sn);
-          }
-        } else if (auto bitmask =
-                       dynamic_cast<const vks::Bitmask*>(tname->entity)) {
-          auto sb = new sps::SingularBitmask;
-          sb->name = accessor_name;
-          sb->member_idx = member_idx;
-          CHECK(bitmask_map.count(bitmask)) << bitmask->name;
-          sb->bitmask = bitmask_map.at(bitmask);
-          sstruct->accessors.push_back(sb);
-        } else if (auto enumeration =
-                       dynamic_cast<const vks::Enumeration*>(tname->entity)) {
-          if (flag_bits.count(enumeration)) {
-            auto sb = new sps::SingularBitmask;
-            sb->name = accessor_name;
-            sb->member_idx = member_idx;
-            sb->bitmask = flag_bits.at(enumeration);
-            sb->flag_bits = true;
-            sstruct->accessors.push_back(sb);
-          } else {
-            auto se = new sps::SingularEnumeration;
-            se->name = accessor_name;
-            se->member_idx = member_idx;
-            CHECK(enumeration_map.count(enumeration)) << enumeration->name;
-            se->enumeration = enumeration_map.at(enumeration);
-            sstruct->accessors.push_back(se);
-          }
-        }
+      const vks::Member& vmember = vstruct->members.at(member_idx);
+      sps::Member smember;
+      smember.name = translate_member_name(vmember.name) + "_";
+      smember.len = vmember.len;
+      if (smember.len.size() > 0 && smember.len.back() == "null-terminated") {
+        smember.null_terminated = true;
+        smember.len.pop_back();
       }
+      smember.optional_ = vmember.optional;
+      smember.vtype = vmember.type;
+      sstruct->members.push_back(smember);
     }
 
     for (const auto& [aname, alias] : vreg.structs) {
@@ -303,118 +340,55 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
     sreg.structs.push_back(sstruct);
   }
 
-  for (const auto& [name, vcommand] : vreg.commands) {
-    if (name != vcommand->name) continue;
-    auto scommand = new sps::Command;
-    scommand->name = translate_command_name(name);
-    scommand->command = vcommand;
-    for (const auto& [aname, alias] : vreg.commands) {
-      if (vcommand == alias && aname != alias->name) {
-        scommand->aliases.push_back(translate_command_name(aname));
+  for (auto struct_ : sreg.structs) {
+    dvc::insert_or_die(sreg.struct_map, struct_->struct_, struct_);
+  }
+
+  std::unordered_set<sps::Struct*> todo_structs(sreg.structs.begin(),
+                                                sreg.structs.end());
+  sreg.structs.clear();
+
+  auto struct_deps = [&](sps::Struct* struct_) {
+    std::vector<sps::Struct*> deps;
+    for (const vks::Member& member : struct_->struct_->members) {
+      const vks::Entity* entity;
+      bool complete;
+      member.type->get_entity_dep(entity, complete);
+      if (complete)
+        if (auto vstruct = dynamic_cast<const vks::Struct*>(entity))
+          deps.push_back(sreg.struct_map.at(vstruct));
+    }
+    return deps;
+  };
+  while (!todo_structs.empty()) {
+    std::vector<sps::Struct*> structs_done;
+    for (sps::Struct* struct_ : todo_structs) {
+      bool depsok = true;
+      for (sps::Struct* dep : struct_deps(struct_)) {
+        if (todo_structs.count(dep)) {
+          depsok = false;
+          break;
+        }
+      }
+      if (depsok) {
+        structs_done.push_back(struct_);
       }
     }
-    sreg.commands.push_back(scommand);
-    vks::Type* first_param_type = vcommand->params.at(0).type;
-    if (auto tname = dynamic_cast<vks::Name*>(first_param_type)) {
-      if (auto vhandle = dynamic_cast<vks::Handle*>(tname->entity))
-        handle_map.at(vhandle)->commands.push_back(scommand);
-      else
-        LOG(ERROR) << "GLOBAL " << scommand->name;
-    } else {
-      LOG(ERROR) << "GLOBAL " << scommand->name;
+    if (structs_done.empty()) LOG(FATAL) << "Circular dependency in structs";
+    sort_on_name(structs_done);
+    for (sps::Struct* struct_ : structs_done) {
+      CHECK(todo_structs.erase(struct_));
+      sreg.structs.push_back(struct_);
     }
   }
 
-  //  for (const auto& [name, external] : vreg.externals) {
-  //    (void)external;
-  //    LOG(ERROR) << name;
-  //  }
+  for (sps::Struct* struct_ : sreg.structs) {
+    for (sps::Member& member : struct_->members) {
+      member.stype = translate_member_type(vreg, sreg, member.vtype);
+    }
+  }
 
-  //  std::unordered_map<std::string, size_t> type_count;
-  //  auto visit_type = [&](vks::Type* type) {
-  //    std::string signature;
-  //
-  //    vks::Type* t = type;
-  //    while (true) {
-  //      if (auto const_ = dynamic_cast<vks::Const*>(t)) {
-  //        signature += 'c';
-  //        t = const_->T;
-  //      } else if (auto pointer = dynamic_cast<vks::Pointer*>(t)) {
-  //        signature += 'p';
-  //        t = pointer->T;
-  //      } else if (auto array = dynamic_cast<vks::Array*>(t)) {
-  //        signature += 'a';
-  //        t = array->T;
-  //      } else if (auto name = dynamic_cast<vks::Name*>(t)) {
-  //        vks::Entity* entity = name->entity;
-  //        CHECK(entity);
-  //        if (dynamic_cast<vks::External*>(entity)) {
-  //          signature += 'x';
-  //        } else if (dynamic_cast<vks::Constant*>(entity)) {
-  //          LOG(FATAL) << "type to constant??? " << entity->name;
-  //        } else if (dynamic_cast<vks::Enumeration*>(entity)) {
-  //          signature += 'e';
-  //        } else if (dynamic_cast<vks::Bitmask*>(entity)) {
-  //          signature += 'b';
-  //        } else if (dynamic_cast<vks::Handle*>(entity)) {
-  //          signature += 'h';
-  //        } else if (dynamic_cast<vks::Struct*>(entity)) {
-  //          signature += 's';
-  //        } else if (dynamic_cast<vks::FunctionPrototype*>(entity)) {
-  //          signature += 'f';
-  //        } else if (dynamic_cast<vks::Command*>(entity)) {
-  //          LOG(FATAL) << "type to command??? " << entity->name;
-  //        } else {
-  //          LOG(FATAL) << "unknown entity type: "
-  //                     << typeid(decltype(entity)).name() << " " <<
-  //                     entity->name;
-  //        }
-  //        break;
-  //      } else {
-  //        LOG(FATAL) << "unexpected type subclass: "
-  //                   << typeid(decltype(t)).name();
-  //      }
-  //    }
-  //
-  //    type_count[signature]++;
-  //    return signature == "f";
-  //  };
-  //
-  //  for (const auto& [name, struct_] : vreg.structs)
-  //    for (vks::Member& member : struct_->members)
-  //      if (visit_type(member.type))
-  //        LOG(ERROR) << name << "." << member.name << " "
-  //                   << member.type->to_string();
-  //
-  //  for (const auto& [name, funcpointer] : vreg.function_prototypes)
-  //    for (vks::FunctionPrototypeParam& param : funcpointer->params)
-  //      if (visit_type(param.type))
-  //        LOG(ERROR) << name << "." << param.name << " "
-  //                   << param.type->to_string();
-  //
-  //  for (const auto& [name, command] : vreg.commands)
-  //    for (vks::CommandParam& param : command->params)
-  //      if (visit_type(param.type))
-  //        LOG(ERROR) << name << "." << param.name << " "
-  //                   << param.type->to_string();
-  //
-  //  for (auto [k, v] : type_count) LOG(ERROR) << "type_count " << k << " " <<
-  //  v;
-
-  //  for (const auto& [name, command] : vreg.commands) {
-  //    if (dvc::startswith(name, "vkCreate") ||
-  //        dvc::startswith(name, "vkAllocate"))
-  //      LOG(ERROR) << "COMMAND " << name;
-  //
-  //    for (vks::CommandParam& param : command->params) {
-  //      (void)param;
-  //    }
-  //  }
-  //
-  //  for (const auto& [name, vhandle] : vreg.handles) {
-  //    (void)vhandle;
-  //    LOG(ERROR) << "HANDLE " << name;
-  //  }
+  sps::add_accessors(sreg, vreg);
 
   return sreg;
 }

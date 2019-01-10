@@ -1,8 +1,8 @@
 #pragma once
 
-#include <fstream>
 #include <glog/logging.h>
 #include <experimental/filesystem>
+#include <fstream>
 
 namespace dvc {
 
@@ -23,13 +23,9 @@ class file_reader {
     return len;
   }
 
-  void read(void* buf, size_t n) {
-    ifs.read((char*) buf, n);
-  }
+  void read(void* buf, size_t n) { ifs.read((char*)buf, n); }
 
-  void seek(size_t pos) {
-    ifs.seekg(pos);
-  }
+  void seek(size_t pos) { ifs.seekg(pos); }
 
   size_t tell() { return ifs.tellg(); }
 
@@ -37,8 +33,10 @@ class file_reader {
   std::ifstream ifs;
 };
 
-struct append_t {} append;
-struct truncate_t {} truncate;
+struct append_t {
+} append;
+struct truncate_t {
+} truncate;
 
 class file_writer {
  public:
@@ -48,30 +46,26 @@ class file_writer {
   file_writer(const dvc::fspath& fspath, truncate_t) {
     open(fspath, std::ios::trunc);
   }
-  void write(const void* buf, size_t n) {
-    ofs.write((const char*) buf, n);
-  }
-  void write(std::string_view sv) {
-    write(sv.data(), sv.size());
-  }
-  template<typename... Args>
+  void write(const void* buf, size_t n) { ofs.write((const char*)buf, n); }
+  void write(std::string_view sv) { write(sv.data(), sv.size()); }
+  template <typename... Args>
   void print(Args&&... args) {
     (ofs << ... << std::forward<Args>(args));
   }
-  void println() {
-    ofs << std::endl;
-  }
-  template<typename... Args>
+  void println() { ofs << std::endl; }
+  template <typename... Args>
   void println(Args&&... args) {
     print(std::forward<Args>(args)...);
     ofs << std::endl;
   }
 
   std::ostream& ostream() { return ofs; }
+
  private:
   void open(const dvc::fspath& fspath, std::ios::openmode mode_extra) {
     ofs.exceptions(std::ios::badbit | std::ios::failbit | std::ios::eofbit);
-    ofs.open(fspath.string().c_str(), std::ios::binary | std::ios::out | mode_extra);
+    ofs.open(fspath.string().c_str(),
+             std::ios::binary | std::ios::out | mode_extra);
   }
   std::ofstream ofs;
 };
@@ -88,4 +82,4 @@ inline void touch_file(const dvc::fspath& fspath) {
   file_writer writer(fspath, append);
 }
 
-} // namespace dvc
+}  // namespace dvc

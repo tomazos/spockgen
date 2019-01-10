@@ -5,7 +5,9 @@
 
 namespace mnc {
 
-struct Expr { virtual ~Expr() = default; };
+struct Expr {
+  virtual ~Expr() = default;
+};
 
 struct Reference : Expr {
   Reference(const std::string& name) : name(name) {}
@@ -17,7 +19,9 @@ struct Number : Expr {
   std::string number;
 };
 
-struct Type { virtual ~Type() = default; };
+struct Type {
+  virtual ~Type() = default;
+};
 
 struct Name : Type {
   Name(const std::string& name) : name(name) {}

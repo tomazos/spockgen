@@ -1,4 +1,4 @@
-#include "vulkan_api_schema_parser.h"
+#include "vks/vksparser.h"
 
 #include <map>
 #include <set>
@@ -261,7 +261,7 @@ void parse_handles(vks::Registry& registry, const vkr::start& start) {
     if (!type.parent) return;
     vks::Handle* handle = registry.handles.at(name);
     for (const std::string& parent : dvc::split(",", type.parent.value())) {
-      handle->parents.push_back(registry.handles.at(parent));
+      handle->parents.insert(registry.handles.at(parent));
     }
   });
 }
@@ -388,11 +388,22 @@ void parse_structs(vks::Registry& registry, TypeBackpatches& backpatches,
           continue;
         }
       }
+
       if (member_in.altlen) {
         CHECK(member_in.len);
+        for (const std::string& s : dvc::split(",", member_in.altlen.value()))
+          member_out.len.push_back(s);
+      } else if (member_in.len) {
+        for (const std::string& s : dvc::split(",", member_in.len.value()))
+          member_out.len.push_back(s);
       }
-      if (member_in.len) {
-        member_out.len = member_in.len;
+
+      if (member_in.optional) {
+        for (const std::string& s :
+             dvc::split(",", member_in.optional.value())) {
+          CHECK(s == "true" || s == "false");
+          member_out.optional.push_back(s == "true" ? true : false);
+        }
       }
 
       mnc::Declaration decl =
@@ -401,6 +412,7 @@ void parse_structs(vks::Registry& registry, TypeBackpatches& backpatches,
       mnc::Type* member_type = decl.type;
       backpatches.add_struct_member_backpatch(struct_, struct_->members.size(),
                                               member_type);
+
       struct_->members.push_back(member_out);
     }
   });
@@ -618,6 +630,45 @@ void apply_constant_extends(
   }
 }
 
+void build_dispatch_tables(vks::Registry& registry) {
+  auto relate_dispatch_table = [&](vks::DispatchTableKind kind,
+                                   vks::Command* command) {
+    vks::DispatchTable* dispatch_table = registry.dispatch_table(kind);
+    dispatch_table->commands.push_back(command);
+    CHECK(command->dispatch_table == nullptr);
+    command->dispatch_table = dispatch_table;
+  };
+  for (vks::DispatchTableKind kind :
+       {vks::DispatchTableKind::GLOBAL, vks::DispatchTableKind::INSTANCE,
+        vks::DispatchTableKind::DEVICE}) {
+    auto table = new vks::DispatchTable;
+    table->kind = kind;
+    registry.dispatch_table(kind) = table;
+  }
+  for (const auto& [name, command] : registry.commands) {
+    if (name != command->name) continue;
+    static std::set<std::string> global_command_names = {
+        "vkEnumerateInstanceVersion", "vkEnumerateInstanceExtensionProperties",
+        "vkEnumerateInstanceLayerProperties", "vkCreateInstance"};
+    if (global_command_names.count(name)) {
+      relate_dispatch_table(vks::DispatchTableKind::GLOBAL, command);
+      continue;
+    }
+    auto first_param_type =
+        dynamic_cast<const vks::Name*>(command->params.at(0).type);
+    CHECK(first_param_type);
+    auto dispatch_handle =
+        dynamic_cast<const vks::Handle*>(first_param_type->entity);
+    CHECK(dispatch_handle);
+    if (dispatch_handle->name == "VkInstance" ||
+        dispatch_handle->name == "VkPhysicalDevice") {
+      relate_dispatch_table(vks::DispatchTableKind::INSTANCE, command);
+    } else {
+      relate_dispatch_table(vks::DispatchTableKind::DEVICE, command);
+    }
+  }
+}
+
 }  // namespace
 
 vks::Registry parse_registry(const vkr::start& start) {
@@ -638,6 +689,7 @@ vks::Registry parse_registry(const vkr::start& start) {
   apply_backpatches(registry, backpatches);
   apply_constant_extends(registry, extends);
   remove_disabled(registry, start);
+  build_dispatch_tables(registry);
 
   return registry;
 }

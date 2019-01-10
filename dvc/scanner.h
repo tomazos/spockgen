@@ -1,15 +1,14 @@
 #pragma once
 
-#include <string>
 #include <glog/logging.h>
+#include <string>
 
 namespace dvc {
 
 class scanner {
  public:
-  scanner(const std::string& filename, std::string data) : filename(filename), data(std::move(data)) {
-
-  }
+  scanner(const std::string& filename, std::string data)
+      : filename(filename), data(std::move(data)) {}
 
   static constexpr char eof = 0;
 

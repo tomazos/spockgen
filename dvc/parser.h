@@ -1,22 +1,18 @@
 #pragma once
 
+#include <glog/logging.h>
 #include <string>
 #include <vector>
-#include <glog/logging.h>
-
 
 namespace dvc {
 
-template<class Token>
+template <class Token>
 class parser {
  public:
-  parser(const std::string& filename, std::vector<Token> data) : filename(filename), data(std::move(data)) {
+  parser(const std::string& filename, std::vector<Token> data)
+      : filename(filename), data(std::move(data)) {}
 
-  }
-
-  const Token& peek(size_t offset = 0) const {
-    return data.at(pos() + offset);
-  }
+  const Token& peek(size_t offset = 0) const { return data.at(pos() + offset); }
 
   const Token& pop() {
     const Token& token = peek();

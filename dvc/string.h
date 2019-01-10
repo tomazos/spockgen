@@ -6,7 +6,7 @@
 namespace dvc {
 
 inline std::vector<std::string> split(const std::string& sep,
-                               const std::string joined) {
+                                      const std::string& joined) {
   std::vector<std::string> result;
   size_t pos = 0;
   while (true) {
@@ -20,16 +20,26 @@ inline std::vector<std::string> split(const std::string& sep,
   }
 }
 
-constexpr bool startswith(std::string_view subject, std::string_view prefix) {
-  if (prefix.size() > subject.size())
-    return false;
+template <typename Container>
+inline std::string join(const std::string& sep, const Container& container) {
+  std::ostringstream oss;
+  bool first = true;
+  for (const auto& element : container) {
+    if (!first) oss << sep;
+    oss << element;
+    first = false;
+  }
+  return oss.str();
+}
 
-  return subject.substr(0,prefix.size()) == prefix;
+constexpr bool startswith(std::string_view subject, std::string_view prefix) {
+  if (prefix.size() > subject.size()) return false;
+
+  return subject.substr(0, prefix.size()) == prefix;
 }
 
 constexpr bool endswith(std::string_view subject, std::string_view suffix) {
-  if (suffix.size() > subject.size())
-    return false;
+  if (suffix.size() > subject.size()) return false;
 
   return subject.substr(subject.size() - suffix.size()) == suffix;
 }
