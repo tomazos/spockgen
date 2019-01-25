@@ -17,10 +17,12 @@ struct Entity {
   virtual std::string zeroinit() const { return "= 0"; }
   virtual ~Entity() = default;
   virtual bool size_estimate() const { return false; }
+  virtual bool is_empty_enum() const { return false; }
 };
 
 struct Type {
   virtual std::string to_string() const = 0;
+  virtual bool is_empty_enum() const { return false; }
   virtual std::string make_declaration(const std::string& id,
                                        bool zero = true) const {
     return to_string() + " " + id + (zero ? zeroinit() : "");
@@ -51,6 +53,7 @@ struct Reference : Expr {
 
 struct Name : Type {
   Entity* entity;
+  bool is_empty_enum() const override { return entity->is_empty_enum(); }
 
   std::string zeroinit() const override { return entity->zeroinit(); }
 
@@ -120,12 +123,16 @@ struct Constant : Entity {
 struct Enumeration : Entity {
   std::string zeroinit() const override { return "= " + name + "(0)"; }
   std::vector<const Constant*> enumerators;
+  bool is_empty_enum() const override { return enumerators.empty(); }
 };
 
 struct Bitmask : Entity {
   std::string zeroinit() const override { return "= " + name + "(0)"; }
   const Enumeration* requires = nullptr;
   const Platform* platform = nullptr;
+  bool is_empty_enum() const override {
+    return requires == nullptr || requires->is_empty_enum();
+  }
 };
 
 struct Handle : Entity {
@@ -170,7 +177,7 @@ struct FunctionPrototype : Entity {
   }
 };
 
-struct CommandParam {
+struct Param {
   std::string name;
   Type* type = nullptr;
 };
@@ -180,7 +187,7 @@ struct DispatchTable;
 struct Command : Entity {
   std::string name;
   Type* return_type = nullptr;
-  std::vector<CommandParam> params;
+  std::vector<Param> params;
   const Platform* platform = nullptr;
   const DispatchTable* dispatch_table = nullptr;
   std::string to_type_string() {

@@ -4,6 +4,8 @@
 #define VULKAN_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 
+#include "spk/spock.h"
+
 namespace spk {
 
 class loader {
@@ -14,6 +16,8 @@ class loader {
   PFN get_instance_proc_addr(VkInstance instance, const char* pName);
 
  private:
+  spk::global_dispatch_table global_dispatch_table;
+
   struct deleter {
     void operator()(void* handle);
   };
@@ -25,15 +29,5 @@ template <typename PFN>
 PFN loader::get_instance_proc_addr(VkInstance instance, const char* pName) {
   return (PFN)vkGetInstanceProcAddr(instance, pName);
 }
-
-struct global_dispatch_table {
-  global_dispatch_table(loader& loader);
-
-  PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties;
-  PFN_vkCreateInstance vkCreateInstance;
-  PFN_vkEnumerateInstanceExtensionProperties
-      vkEnumerateInstanceExtensionProperties;
-  PFN_vkEnumerateInstanceVersion vkEnumerateInstanceVersion;
-};
 
 }  // namespace spk

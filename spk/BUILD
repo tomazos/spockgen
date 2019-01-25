@@ -1,15 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-cc_library(
-  name = "loader",
-  hdrs = [
-    "loader.h",
-  ],
-  srcs = [
-    "loader.cc",
-  ],
-)
-
 genrule(
   name = "spock_generate",
   srcs = [
@@ -29,8 +19,16 @@ genrule(
 cc_library(
   name = "spock",
   hdrs = [
+    "loader.h",
     "spock_fwd.h",
     "spock.h",
+  ],
+  srcs = [
+      "loader.cc",
+  ],
+  linkopts = [
+    "-ldl",
+    "-lglog",
   ],
 )
 

@@ -280,15 +280,76 @@ void write_header(const sps::Registry& registry) {
        {vks::DispatchTableKind::GLOBAL, vks::DispatchTableKind::INSTANCE,
         vks::DispatchTableKind::DEVICE}) {
     std::string name = std::string(vks::to_string(kind)) + "_dispatch_table";
-    const vks::DispatchTable* dispatch_table =
-        registry.vreg->dispatch_table(kind);
+    const sps::DispatchTable* dispatch_table = registry.dispatch_table(kind);
     h.println("struct ", name, " {");
-    for (const vks::Command* command : dispatch_table->commands) {
+
+    h.println("  // spock commands");
+    for (const sps::Command* command : dispatch_table->commands) {
+      if (command->command->platform)
+        h.println("#ifdef ", command->command->platform->protect);
+
+      h.println("  ", command->sreturn_type->to_string(), " ", command->name,
+                "(");
+      bool first = true;
+      for (const sps::Param& param : command->params) {
+        if (param.stype->is_empty_enum()) continue;
+        if (first) {
+          first = false;
+        } else {
+          h.println(",");
+        }
+        h.print("    ", param.stype->make_declaration(param.name, 0));
+      }
+      h.println();
+      h.println("  ) {");
+      if (command->vreturn_type->to_string() != "void")
+        h.println("    return (", command->sreturn_type->to_string(), ")(");
+      h.println("    ", command->command->name, "(");
+      first = true;
+      for (const sps::Param& param : command->params) {
+        if (first) {
+          first = false;
+        } else {
+          h.println(",");
+        }
+        if (param.stype->is_empty_enum())
+          h.print("      (", param.vtype->to_string(), ") 0 /*", param.name,
+                  "*/");
+        else if (dynamic_cast<const vks::Array*>(param.vtype))
+          h.print("      ", param.name, ".data()");
+        else
+          h.print("      (", param.vtype->to_string(), ") ", param.name);
+      }
+      h.println();
+      h.print("    )");
+      if (command->vreturn_type->to_string() != "void") h.print(")");
+      h.println(";");
+      h.println("  }");
+
+      if (command->command->platform) h.println("#endif");
+      h.println();
+    }
+
+    h.println("  // vulkan commands");
+    for (const vks::Command* command :
+         dispatch_table->dispatch_table->commands) {
       if (command->platform) h.println("#ifdef ", command->platform->protect);
-      h.println("  PFN_", command->name, " ", command->name, ";");
+      h.println("  PFN_", command->name, " ", command->name, " = nullptr;");
       if (command->platform) h.println("#endif");
     }
     h.println("};");
+    h.println();
+    h.println("template<class Visitor> void visit_dispatch_table(", name,
+              "& dispatch_table, const Visitor& V) {");
+    for (const vks::Command* command :
+         dispatch_table->dispatch_table->commands) {
+      if (command->platform) h.println("#ifdef ", command->platform->protect);
+      std::string c = command->name;
+      h.println("  V(dispatch_table, &", name, "::", c, ", \"", c, "\");");
+      if (command->platform) h.println("#endif");
+    }
+    h.println("}");
+    h.println();
   }
 
   for (const auto& handle : registry.handles) {

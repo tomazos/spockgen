@@ -16,6 +16,7 @@ struct Enumeration : Entity {
   const vks::Enumeration* enumeration;
   std::vector<Enumerator> enumerators;
   std::vector<std::string> aliases;
+  bool is_empty_enum() const override { return enumeration->is_empty_enum(); }
 };
 
 struct Bitmask : Entity {
@@ -24,6 +25,7 @@ struct Bitmask : Entity {
   const vks::Bitmask* bitmask;
   std::vector<Enumerator> enumerators;
   std::vector<std::string> aliases;
+  bool is_empty_enum() const override { return bitmask->is_empty_enum(); }
 };
 
 struct Constant : Entity {
@@ -48,6 +50,7 @@ struct Name : vks::Type {
     complete = true;
   }
   std::string zeroinit() const override { return entity->zeroinit(); }
+  bool is_empty_enum() const override { return entity->is_empty_enum(); }
 };
 
 struct Member {
@@ -111,9 +114,23 @@ struct Struct : Entity {
   virtual bool size_estimate() const { return true; }
 };
 
+struct Param {
+  std::string name;
+  const vks::Type* vtype;
+  const vks::Type* stype;
+};
+
 struct Command : Entity {
   const vks::Command* command;
+  const vks::Type* vreturn_type;
+  const vks::Type* sreturn_type;
+  std::vector<Param> params;
   std::vector<std::string> aliases;
+};
+
+struct DispatchTable {
+  const vks::DispatchTable* dispatch_table;
+  std::vector<const Command*> commands;
 };
 
 struct Registry {
@@ -133,6 +150,18 @@ struct Registry {
   std::unordered_map<const vks::Struct*, sps::Struct*> struct_map;
   std::unordered_map<const vks::Enumeration*, const sps::Bitmask*>
       flag_bits_map;
+  std::unordered_map<const vks::Command*, std::vector<const sps::Command*>>
+      command_map;
+
+  DispatchTable*& dispatch_table(vks::DispatchTableKind kind) {
+    return dispatch_tables_[size_t(kind)];
+  }
+  const DispatchTable* dispatch_table(vks::DispatchTableKind kind) const {
+    return dispatch_tables_[size_t(kind)];
+  }
+
+ private:
+  std::array<DispatchTable*, 3> dispatch_tables_;
 };
 
 }  // namespace sps

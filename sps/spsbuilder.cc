@@ -97,10 +97,10 @@ std::string translate_enumerator_name(const std::string& name) {
   return to_underscore_style(split_identifier_view(name.substr(3)));
 }
 
-// std::string translate_command_name(const std::string& name) {
-//  CHECK(name.substr(0, 2) == "vk") << name;
-//  return to_underscore_style(split_identifier_view(name.substr(2)));
-//}
+std::string translate_command_name(const std::string& name) {
+  CHECK(name.substr(0, 2) == "vk") << name;
+  return to_underscore_style(split_identifier_view(name.substr(2)));
+}
 
 std::string translate_member_name(const std::string& name) {
   return to_underscore_style(split_identifier_view(name));
@@ -193,12 +193,18 @@ const vks::Type* translate_member_type(const vks::Registry& vreg,
   }
 }
 
-}  // namespace
+const vks::Type* translate_param_type(const vks::Registry& vreg,
+                                      const sps::Registry& sreg,
+                                      const vks::Type* vtype) {
+  return translate_member_type(vreg, sreg, vtype);
+}
 
-sps::Registry build_spock_registry(const vks::Registry& vreg) {
-  sps::Registry sreg;
-  sreg.vreg = &vreg;
+auto sort_on_name = [](auto& container) {
+  std::sort(container.begin(), container.end(),
+            [](auto a, auto b) { return a->name < b->name; });
+};
 
+void build_enum(sps::Registry& sreg, const vks::Registry& vreg) {
   std::unordered_set<const vks::Constant*> constants_done;
 
   auto convert_enumeration = [&](std::string name,
@@ -232,11 +238,6 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
     }
     dvc::sort(senumeration->aliases);
     return senumeration;
-  };
-
-  auto sort_on_name = [](auto& container) {
-    std::sort(container.begin(), container.end(),
-              [](auto a, auto b) { return a->name < b->name; });
   };
 
   for (const auto& [name, vbitmask] : vreg.bitmasks) {
@@ -292,7 +293,9 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
     sreg.constants.push_back(sconstant);
   }
   sort_on_name(sreg.constants);
+}
 
+void build_handle(sps::Registry& sreg, const vks::Registry& vreg) {
   for (const auto& [name, vhandle] : vreg.handles) {
     if (name != vhandle->name) continue;
     auto shandle = new sps::Handle;
@@ -311,7 +314,9 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
   for (auto handle : sreg.handles) {
     dvc::insert_or_die(sreg.handle_map, handle->handle, handle);
   }
+}
 
+void build_struct(sps::Registry& sreg, const vks::Registry& vreg) {
   for (const auto& [name, vstruct] : vreg.structs) {
     if (name != vstruct->name) continue;
     auto sstruct = new sps::Struct;
@@ -387,8 +392,58 @@ sps::Registry build_spock_registry(const vks::Registry& vreg) {
       member.stype = translate_member_type(vreg, sreg, member.vtype);
     }
   }
+}
 
+void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
+  for (const auto& [name, vcommand] : vreg.commands) {
+    auto scommand = new sps::Command;
+    scommand->command = vcommand;
+    scommand->name = translate_command_name(name);
+
+    scommand->vreturn_type = vcommand->return_type;
+    scommand->sreturn_type =
+        translate_param_type(vreg, sreg, vcommand->return_type);
+
+    for (const vks::Param& vparam : vcommand->params) {
+      sps::Param sparam;
+      sparam.name = vparam.name;
+      sparam.vtype = vparam.type;
+      sparam.stype = translate_param_type(vreg, sreg, vparam.type);
+      scommand->params.push_back(sparam);
+    }
+    sreg.commands.push_back(scommand);
+    sreg.command_map[vcommand].push_back(scommand);
+  }
+
+  for (vks::DispatchTableKind dispatch_table_kind :
+       {vks::DispatchTableKind::GLOBAL, vks::DispatchTableKind::INSTANCE,
+        vks::DispatchTableKind::DEVICE}) {
+    const vks::DispatchTable* vdispatch_table =
+        vreg.dispatch_table(dispatch_table_kind);
+    sps::DispatchTable*& sdispatch_table =
+        sreg.dispatch_table(dispatch_table_kind);
+    sdispatch_table = new sps::DispatchTable;
+
+    sdispatch_table->dispatch_table = vdispatch_table;
+    for (const vks::Command* vcommand : vdispatch_table->commands) {
+      for (const sps::Command* scommand : sreg.command_map.at(vcommand)) {
+        sdispatch_table->commands.push_back(scommand);
+      }
+    }
+  }
+}
+
+}  // namespace
+
+sps::Registry build_spock_registry(const vks::Registry& vreg) {
+  sps::Registry sreg;
+  sreg.vreg = &vreg;
+
+  build_enum(sreg, vreg);
+  build_handle(sreg, vreg);
+  build_struct(sreg, vreg);
   sps::add_accessors(sreg, vreg);
+  build_command(sreg, vreg);
 
   return sreg;
 }

@@ -16,6 +16,19 @@ genrule(
   ],
 )
 
+cc_test(
+  name = "loadertest",
+  srcs = [
+     "loadertest.cc",
+  ],
+  deps = [
+     "//spk:spock",
+  ],
+  linkopts = [
+     "-lglog",
+     "-lgflags",
+  ],
+)
 
 cc_test(
   name = "vulkan_relaxng_test",

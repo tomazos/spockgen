@@ -314,15 +314,15 @@ struct TypeBackpatches {
     dvc::insert_or_die(command_return_backpatches, command, return_type);
   }
 
-  struct CommandParamBackpatch {
+  struct ParamBackpatch {
     size_t param_idx;
     mnc::Type* type;
   };
-  std::multimap<vks::Command*, CommandParamBackpatch> command_param_backpatches;
+  std::multimap<vks::Command*, ParamBackpatch> command_param_backpatches;
   void add_command_param_backpatch(vks::Command* command, size_t param_idx,
                                    mnc::Type* type) {
     command_param_backpatches.insert(
-        std::make_pair(command, CommandParamBackpatch{param_idx, type}));
+        std::make_pair(command, ParamBackpatch{param_idx, type}));
   }
 };
 
@@ -479,7 +479,7 @@ void parse_commands(vks::Registry& registry, TypeBackpatches& backpatches,
       mnc::Declaration decl =
           mnc::parse_declaration(parse_inner_text(param_in._element_));
       CHECK_EQ(decl.name, param_in.name);
-      vks::CommandParam param_out;
+      vks::Param param_out;
       param_out.name = decl.name;
       backpatches.add_command_param_backpatch(
           command_out, command_out->params.size(), decl.type);
@@ -575,7 +575,7 @@ void apply_backpatches(vks::Registry& registry, TypeBackpatches& backpatches) {
         backpatches.command_param_backpatches.equal_range(command);
     for (auto it = params_backpatch.first; it != params_backpatch.second;
          ++it) {
-      vks::CommandParam& param = command->params.at(it->second.param_idx);
+      vks::Param& param = command->params.at(it->second.param_idx);
       param.type = translate_type(registry, it->second.type);
     }
   }
