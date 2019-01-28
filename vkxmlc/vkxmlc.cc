@@ -105,27 +105,32 @@ void write_header(const sps::Registry& registry) {
     std::string name = bitmask->name;
     h.println("// bitmask ", bitmask->bitmask->name);
     h.print("enum class ", name, " {");
-    if (bitmask->enumerators.empty()) {
-      h.println("};");
-      h.println();
-    } else {
-      h.println();
-      for (const auto& enumerator : bitmask->enumerators)
-        h.println("  ", enumerator.name, " = ", enumerator.constant->name, ",");
-      h.println("};");
-      h.println("SPK_DEFINE_BITMASK_BITWISE_OPS(", name, ");");
-      h.println();
-    }
+    h.println();
+    for (const auto& enumerator : bitmask->enumerators)
+      h.println("  ", enumerator.name, " = ", enumerator.constant->name, ",");
+    h.println("};");
+    h.println("SPK_DEFINE_BITMASK_BITWISE_OPS(", name, ");");
+    h.println();
     for (const auto& alias : bitmask->aliases) {
       h.println("using ", alias, " = ", bitmask->name, ";");
       h.println();
     }
+    h.println("inline std::ostream& operator<<(std::ostream& o, ", name,
+              " e){");
+    h.println("  SPK_BEGIN_BITMASK_OUTPUT(", name, ")");
+    for (const auto& enumerator : bitmask->enumerators) {
+      h.println("  SPK_BITMASK_OUTPUT_ENUMERATOR(", name, ", ", enumerator.name,
+                ")");
+    }
+    h.println("  SPK_END_BITMASK_OUTPUT(", name, ")");
+    h.println("}");
   }
 
   for (const sps::Enumeration* enumeration : registry.enumerations) {
     if (enumeration->enumerators.empty()) continue;
+    std::string name = enumeration->name;
     h.println("// enumeration ", enumeration->enumeration->name);
-    h.println("enum class ", enumeration->name, " {");
+    h.println("enum class ", name, " {");
     for (const auto& enumerator : enumeration->enumerators)
       h.println("  ", enumerator.name, " = ", enumerator.constant->name, ",");
     h.println("};");
@@ -133,6 +138,22 @@ void write_header(const sps::Registry& registry) {
     for (const auto& alias : enumeration->aliases) {
       h.println("using ", alias, " = ", enumeration->name, ";");
       h.println();
+    }
+    h.println("inline std::ostream& operator<<(std::ostream& o, ", name,
+              " e){");
+    h.println("  SPK_BEGIN_ENUMERATION_OUTPUT(", name, ")");
+    for (const auto& enumerator : enumeration->enumerators) {
+      h.println("  SPK_ENUMERATION_OUTPUT_ENUMERATOR(", name, ", ",
+                enumerator.name, ")");
+    }
+    h.println("  SPK_END_ENUMERATION_OUTPUT(", name, ")");
+    h.println("}");
+    if (enumeration->name == "result") {
+      h.println("SPK_BEGIN_RESULT_ERRORS");
+      for (const auto& enumerator : enumeration->enumerators)
+        if (dvc::startswith(enumerator.name, "error"))
+          h.println("SPK_DEFINE_RESULT_ERROR(", enumerator.name, ")");
+      h.println("SPK_END_RESULT_ERRORS");
     }
   }
 
@@ -212,7 +233,7 @@ void write_header(const sps::Registry& registry) {
             h.println("  void set_", aname, "(spk::string_ptr str) { ", mname,
                       " = str.get(); }");
           } else {
-            h.println("  std::string_view ", aname, "() { return ", mname,
+            h.println("  std::string_view ", aname, "() const { return ", mname,
                       "; }");
           }
         } else if (auto bool_accessor =
@@ -224,7 +245,7 @@ void write_header(const sps::Registry& registry) {
             h.println("  void set_", aname, "(bool val) { ", mname,
                       " = val; }");
           } else {
-            h.println("  bool ", aname, "() { return ", mname, "; }");
+            h.println("  bool ", aname, "() const { return ", mname, "; }");
           }
         } else if (auto span_accessor =
                        dynamic_cast<const sps::SpanAccessor*>(accessor)) {
@@ -242,13 +263,17 @@ void write_header(const sps::Registry& registry) {
                       " = value.get(); ", mcount, " = value.size(); }");
           } else {
             h.println("  spk::array_view<", element_type->to_string(), "> ",
-                      aname, "() { return {", msubject, ", ", mcount, "};}");
+                      aname, "() const { return {", msubject, ", ", mcount,
+                      "};}");
           }
         } else {
           LOG(FATAL) << "Unknown Accessor subclass " << typeid(accessor).name();
         }
       }
       h.println();
+    }
+    if (struct_->struct_->structured_type) {
+      h.println("  void set_next(void* next) { p_next_ = next; }");
     }
     h.println(" private:");
     if (struct_->struct_->structured_type) {
@@ -285,11 +310,24 @@ void write_header(const sps::Registry& registry) {
 
     h.println("  // spock commands");
     for (const sps::Command* command : dispatch_table->commands) {
+      bool isresult = (command->vreturn_type->to_string() == "VkResult");
+      bool ismultisuccess =
+          (isresult && command->command->successcodes.size() > 1);
+      bool isonesuccess = (isresult && !ismultisuccess);
+      bool isvoid = command->vreturn_type->to_string() == "void";
+      bool isother = (!isvoid && !isresult);
+
       if (command->command->platform)
         h.println("#ifdef ", command->command->platform->protect);
 
-      h.println("  ", command->sreturn_type->to_string(), " ", command->name,
-                "(");
+      if (ismultisuccess) {
+        h.println("  [[nodiscard]] spk::result ", command->name, "(");
+      } else if (isonesuccess) {
+        h.println("  void  ", command->name, "(");
+      } else {
+        h.println("  ", command->sreturn_type->to_string(), " ", command->name,
+                  "(");
+      }
       bool first = true;
       for (const sps::Param& param : command->params) {
         if (param.stype->is_empty_enum()) continue;
@@ -301,8 +339,10 @@ void write_header(const sps::Registry& registry) {
         h.print("    ", param.stype->make_declaration(param.name, 0));
       }
       h.println();
-      h.println("  ) {");
-      if (command->vreturn_type->to_string() != "void")
+      h.println("  ) const {");
+
+      if (isresult) h.println("    const VkResult res = ");
+      if (isother)
         h.println("    return (", command->sreturn_type->to_string(), ")(");
       h.println("    ", command->command->name, "(");
       first = true;
@@ -322,9 +362,78 @@ void write_header(const sps::Registry& registry) {
       }
       h.println();
       h.print("    )");
-      if (command->vreturn_type->to_string() != "void") h.print(")");
+      if (isother) h.print(")");
       h.println(";");
+      if (isresult) {
+        h.println("    switch (res) {");
+        if (isonesuccess) {
+          CHECK(command->command->successcodes.at(0)->name == "VK_SUCCESS");
+          h.println("      case VK_SUCCESS: return;");
+        } else {
+          for (const sps::Enumerator* successcode : command->successcodes) {
+            h.println("      case ", successcode->constant->name,
+                      ": return spk::result::", successcode->name, ";");
+          }
+        }
+
+        for (const sps::Enumerator* errorcode : command->errorcodes) {
+          h.println("      case ", errorcode->constant->name,
+                    ": throw spk::", errorcode->name, "();");
+        }
+        h.println(
+            "      default: throw spk::unexpected_command_result((spk::result) "
+            "res, \"",
+            command->command->name, "\");");
+        h.println("    }");
+      }
       h.println("  }");
+
+      const vks::Type* sz;
+      const vks::Type* res;
+      if (command->resultvec(sz, res)) {
+        h.println();
+        h.println("  std::vector<", res->to_string(), "> ", command->name, "(");
+        bool first = true;
+        for (size_t i = 0; i < command->params.size() - 2; ++i) {
+          const sps::Param& param = command->params.at(i);
+          if (param.stype->is_empty_enum()) continue;
+          if (first) {
+            first = false;
+          } else {
+            h.println(",");
+          }
+          h.print("    ", param.stype->make_declaration(param.name, 0));
+        }
+        h.println();
+        h.println("  ) const {");
+        h.println("    ", sz->to_string(), " sz_;");
+        h.print("    spk::result rz_ = ", command->name, "(");
+        for (size_t i = 0; i < command->params.size() - 2; ++i) {
+          const sps::Param& param = command->params.at(i);
+          if (param.stype->is_empty_enum()) continue;
+          h.print(param.name, ",");
+        }
+        h.println("&sz_,nullptr);");
+        h.println("    if (rz_ != spk::result::success)");
+        h.println("       throw spk::unexpected_command_result(rz_, \"",
+                  command->command->name, "\");");
+
+        h.println("    std::vector<", res->to_string(), "> rt_(sz_);");
+
+        h.print("    rz_ = ", command->name, "(");
+        for (size_t i = 0; i < command->params.size() - 2; ++i) {
+          const sps::Param& param = command->params.at(i);
+          if (param.stype->is_empty_enum()) continue;
+          h.print(param.name, ",");
+        }
+        h.println("&sz_,rt_.data());");
+        h.println("    if (rz_ != spk::result::success)");
+        h.println("       throw spk::unexpected_command_result(rz_, \"",
+                  command->command->name, "\");");
+        h.println("    return rt_;");
+
+        h.println("  }");
+      }
 
       if (command->command->platform) h.println("#endif");
       h.println();

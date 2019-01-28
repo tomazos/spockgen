@@ -395,6 +395,16 @@ void build_struct(sps::Registry& sreg, const vks::Registry& vreg) {
 }
 
 void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
+  for (const sps::Enumeration* enumeration : sreg.enumerations) {
+    if (enumeration->name != "result") continue;
+    CHECK_EQ(enumeration->enumerators.size(),
+             enumeration->enumeration->enumerators.size());
+    for (size_t i = 0; i < enumeration->enumerators.size(); i++) {
+      sreg.codemap[enumeration->enumeration->enumerators.at(i)] =
+          &(enumeration->enumerators.at(i));
+    }
+  }
+
   for (const auto& [name, vcommand] : vreg.commands) {
     auto scommand = new sps::Command;
     scommand->command = vcommand;
@@ -411,6 +421,12 @@ void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
       sparam.stype = translate_param_type(vreg, sreg, vparam.type);
       scommand->params.push_back(sparam);
     }
+
+    for (const vks::Constant* successcode : vcommand->successcodes)
+      scommand->successcodes.push_back(sreg.codemap.at(successcode));
+    for (const vks::Constant* errorcode : vcommand->errorcodes)
+      scommand->errorcodes.push_back(sreg.codemap.at(errorcode));
+
     sreg.commands.push_back(scommand);
     sreg.command_map[vcommand].push_back(scommand);
   }

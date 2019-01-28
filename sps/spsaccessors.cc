@@ -110,8 +110,8 @@ struct StringAccessoryFactory : SingularAccessorFactory {
 
 void add_accessors(sps::Registry& sreg, const vks::Registry& vreg) {
   static std::vector<const AccessorFactory*> factories = {
-      new SpanAccessoryFactory, new BoolAccessoryFactory,
-      new StringAccessoryFactory, new ValueAccessoryFactory};
+      new BoolAccessoryFactory, new StringAccessoryFactory,
+      new SpanAccessoryFactory, new ValueAccessoryFactory};
 
   for (sps::Struct* struct_ : sreg.structs)
     for (auto factory : factories)

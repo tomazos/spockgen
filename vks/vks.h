@@ -190,6 +190,10 @@ struct Command : Entity {
   std::vector<Param> params;
   const Platform* platform = nullptr;
   const DispatchTable* dispatch_table = nullptr;
+
+  std::vector<const Constant*> successcodes;
+  std::vector<const Constant*> errorcodes;
+
   std::string to_type_string() {
     std::ostringstream oss;
     oss << return_type->to_string() << " (*)(";

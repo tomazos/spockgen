@@ -16,7 +16,7 @@ genrule(
   ],
 )
 
-cc_test(
+cc_binary(
   name = "loadertest",
   srcs = [
      "loadertest.cc",
@@ -65,4 +65,14 @@ cc_test(
   deps = [
     "//spk:spock",
   ],
+)
+
+cc_binary(
+   name = "vulkan_debug_test",
+   srcs = [
+       "vulkan_debug_test.c",
+   ],
+   linkopts = [
+       "-lvulkan",
+   ],
 )

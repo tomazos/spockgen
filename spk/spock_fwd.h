@@ -1,6 +1,8 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <ostream>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -11,7 +13,45 @@ static_assert(std::is_same_v<VkDeviceSize, uint64_t>);
 
 using bool32_t = VkBool32;
 
-struct non_owning_t {
+class version {
+ public:
+  version(uint32_t v) : v(v) {}
+  operator uint32_t() { return v; }
+
+  version(int major, int minor, int patch)
+      : v(VK_MAKE_VERSION(major, minor, patch)) {}
+  int major_() const { return VK_VERSION_MAJOR(v); }
+  int minor_() const { return VK_VERSION_MINOR(v); }
+  int patch() const { return VK_VERSION_PATCH(v); }
+
+ private:
+  uint32_t v;
+};
+
+inline bool operator==(version a, version b) {
+  return uint32_t(a) == uint32_t(b);
+}
+inline bool operator!=(version a, version b) {
+  return uint32_t(a) != uint32_t(b);
+}
+inline bool operator<(version a, version b) {
+  return uint32_t(a) < uint32_t(b);
+}
+inline bool operator>(version a, version b) {
+  return uint32_t(a) > uint32_t(b);
+}
+inline bool operator<=(version a, version b) {
+  return uint32_t(a) <= uint32_t(b);
+}
+inline bool operator>=(version a, version b) {
+  return uint32_t(a) >= uint32_t(b);
+}
+
+inline std::ostream& operator<<(std::ostream& o, version v) {
+  return o << v.major_() << "." << v.minor_() << "." << v.patch();
+}
+
+constexpr struct non_owning_t {
 } non_owning;
 
 class string_ptr {
@@ -76,11 +116,72 @@ class array_view {
   inline bitmask operator|(bitmask a, bitmask b) {                     \
     return bitmask(VkFlags(a) | VkFlags(b));                           \
   }                                                                    \
-  inline bitmask operator&(bitmask a, bitmask b) {                     \
-    return bitmask(VkFlags(a) & VkFlags(b));                           \
+  inline VkFlags operator&(bitmask a, bitmask b) {                     \
+    return VkFlags(a) & VkFlags(b);                                    \
   }                                                                    \
   inline bitmask operator^(bitmask a, bitmask b) {                     \
     return bitmask(VkFlags(a) ^ VkFlags(b));                           \
   }
+
+#define SPK_BEGIN_BITMASK_OUTPUT(enumeration) \
+  if (e == enumeration(0)) return o << "0";   \
+  bool first = true;
+
+#define SPK_BITMASK_OUTPUT_ENUMERATOR(enumeration, enumerator) \
+  if (e & spk::enumeration::enumerator) {                      \
+    if (first)                                                 \
+      first = false;                                           \
+    else                                                       \
+      o << "|";                                                \
+    o << #enumerator;                                          \
+  }
+
+#define SPK_END_BITMASK_OUTPUT(enumeration) \
+  if (first) o << int(e);                   \
+  return o;
+
+#define SPK_BEGIN_ENUMERATION_OUTPUT(enumeration)
+#define SPK_ENUMERATION_OUTPUT_ENUMERATOR(enumeration, enumerator) \
+  if (e == spk::enumeration::enumerator)                           \
+    return o << #enumerator;                                       \
+  else
+
+#define SPK_END_ENUMERATION_OUTPUT(enumeration) return o << int(e);
+
+#define SPK_BEGIN_RESULT_ERRORS           \
+  struct error : std::exception {         \
+    virtual spk::result code() const = 0; \
+  };
+
+#define SPK_DEFINE_RESULT_ERROR(name)                               \
+  struct name : error {                                             \
+    spk::result code() const override { return spk::result::name; } \
+    const char* what() const noexcept override { return #name; }    \
+  };
+
+#define SPK_END_RESULT_ERRORS                                            \
+  struct unexpected_command_result : error {                             \
+    spk::result res_;                                                    \
+    std::string what_;                                                   \
+    unexpected_command_result(spk::result res, const char* function)     \
+        : res_(res) {                                                    \
+      std::ostringstream oss;                                            \
+      oss << "unexpected " << res << " returned from " << function;      \
+      what_ = oss.str();                                                 \
+    }                                                                    \
+                                                                         \
+    spk::result code() const override { return res_; }                   \
+    const char* what() const noexcept override { return what_.c_str(); } \
+  };
+
+template <typename T>
+struct strip_member_function;
+template <class C, typename F>
+struct strip_member_function<F C::*> {
+  using type = F;
+};
+
+template <typename T>
+using strip_member_function_t = typename strip_member_function<T>::type;
 
 }  // namespace spk

@@ -468,8 +468,24 @@ void parse_commands(vks::Registry& registry, TypeBackpatches& backpatches,
   foreach_command([&](const vkr::Command& command_in) {
     if (command_in.alias_attribute) return;
     std::string name = command_in.proto.value().name;
+    std::vector<std::string> errorcodes, successcodes;
+    if (command_in.errorcodes) {
+      errorcodes = dvc::split(",", command_in.errorcodes.value());
+    }
+    if (command_in.successcodes) {
+      successcodes = dvc::split(",", command_in.successcodes.value());
+    }
     auto command_out = new vks::Command;
     command_out->name = name;
+
+    for (const std::string& errorcode : errorcodes) {
+      command_out->errorcodes.push_back(registry.constants.at(errorcode));
+    }
+
+    for (const std::string& successcode : successcodes) {
+      command_out->successcodes.push_back(registry.constants.at(successcode));
+    }
+
     CHECK(command_in.proto.has_value());
     mnc::Declaration decl = mnc::parse_declaration(
         parse_inner_text(command_in.proto.value()._element_));

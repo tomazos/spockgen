@@ -1,5 +1,7 @@
 #pragma once
 
+#include <glog/logging.h>
+
 #include "vks/vks.h"
 
 namespace sps {
@@ -124,8 +126,31 @@ struct Command : Entity {
   const vks::Command* command;
   const vks::Type* vreturn_type;
   const vks::Type* sreturn_type;
+  std::vector<const Enumerator*> successcodes, errorcodes;
   std::vector<Param> params;
   std::vector<std::string> aliases;
+  bool resultvec(const vks::Type*& sz, const vks::Type*& res) const {
+    bool has_incomplete = false;
+    for (const Enumerator* successcode : successcodes)
+      if (successcode->name == "incomplete") has_incomplete = true;
+    if (!has_incomplete) return false;
+    CHECK_EQ(successcodes.size(), 2);
+    auto szptr =
+        dynamic_cast<const vks::Pointer*>(params.at(params.size() - 2).stype);
+    CHECK(szptr);
+    CHECK(szptr->T->to_string() == "uint32_t" ||
+          szptr->T->to_string() == "size_t");
+    auto resptr =
+        dynamic_cast<const vks::Pointer*>(params.at(params.size() - 1).stype);
+    CHECK(resptr);
+
+    if (resptr->T->to_string() == "void") return false;
+
+    sz = szptr->T;
+    res = resptr->T;
+
+    return true;
+  }
 };
 
 struct DispatchTable {
@@ -152,6 +177,7 @@ struct Registry {
       flag_bits_map;
   std::unordered_map<const vks::Command*, std::vector<const sps::Command*>>
       command_map;
+  std::unordered_map<const vks::Constant*, const sps::Enumerator*> codemap;
 
   DispatchTable*& dispatch_table(vks::DispatchTableKind kind) {
     return dispatch_tables_[size_t(kind)];
