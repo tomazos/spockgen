@@ -314,6 +314,11 @@ void build_handle(sps::Registry& sreg, const vks::Registry& vreg) {
   for (auto handle : sreg.handles) {
     dvc::insert_or_die(sreg.handle_map, handle->handle, handle);
   }
+
+  for (auto handle : sreg.handles) {
+    for (auto parent : handle->handle->parents)
+      handle->parents.insert(sreg.handle_map.at(parent));
+  }
 }
 
 void build_struct(sps::Registry& sreg, const vks::Registry& vreg) {
@@ -416,6 +421,7 @@ void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
 
     for (const vks::Param& vparam : vcommand->params) {
       sps::Param sparam;
+      sparam.param = &vparam;
       sparam.name = vparam.name;
       sparam.vtype = vparam.type;
       sparam.stype = translate_param_type(vreg, sreg, vparam.type);
@@ -446,6 +452,58 @@ void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
         sdispatch_table->commands.push_back(scommand);
       }
     }
+  }
+
+  auto get_handle = [](const vks::Type* t) -> const sps::Handle* {
+    auto n = dynamic_cast<const sps::Name*>(t);
+    if (!n) return nullptr;
+    return dynamic_cast<const sps::Handle*>(n->entity);
+  };
+
+  auto get_ptr_handle = [&](const vks::Type* t) -> const sps::Handle* {
+    auto p = dynamic_cast<const vks::Pointer*>(t);
+    if (!p) return nullptr;
+    return get_handle(p->T);
+  };
+
+  for (const sps::Command* command : sreg.commands) {
+    if (command->params.size() == 0) return;
+    const sps::Handle* chandle = nullptr;
+    sps::MemberFunctionKind kind;
+    if (dvc::startswith(command->name, "create") ||
+        dvc::startswith(command->name, "allocate")) {
+      chandle = get_ptr_handle(command->params.back().stype);
+      kind = sps::MemberFunctionKind::CONSTRUCTOR;
+      CHECK(chandle);
+    } else {
+      const sps::Handle* first_handle = get_handle(command->params.at(0).stype);
+      if (!first_handle) continue;
+      const sps::Handle* second_handle = nullptr;
+      if (command->params.size() > 1) {
+        second_handle = get_handle(command->params.at(1).stype);
+      }
+      if (second_handle &&
+          (!second_handle->handle->parents.count(first_handle->handle) ||
+           !command->params.at(1).param->get_optional(0)))
+        second_handle = nullptr;
+
+      if (dvc::startswith(command->name, "destroy_")) {
+        kind = second_handle ? sps::MemberFunctionKind::DOUBLE_DESTRUCTOR
+                             : sps::MemberFunctionKind::SINGLE_DESTRUCTOR;
+
+      } else {
+        kind = second_handle ? sps::MemberFunctionKind::DOUBLE_HANDLE
+                             : sps::MemberFunctionKind::SINGLE_HANDLE;
+      }
+      chandle = second_handle ? second_handle : first_handle;
+    }
+
+    sps::Handle* handle = sreg.handle_map.at(chandle->handle);
+    CHECK(chandle == handle);
+    sps::MemberFunction member_function;
+    member_function.kind = kind;
+    member_function.command = command;
+    handle->member_functions.push_back(member_function);
   }
 }
 

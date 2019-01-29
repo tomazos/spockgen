@@ -82,14 +82,9 @@ int main(int argc, char** argv) {
 
   spk::instance_ref instance_ref =
       loader.create_instance(&instance_create_info, nullptr);
-  spk::instance_dispatch_table instance_dispatch_table;
-
-  spk::visit_dispatch_table(
-      instance_dispatch_table,
-      [&](spk::instance_dispatch_table& t, auto mf, const char* name) {
-        using PFN = spk::strip_member_function_t<decltype(mf)>;
-        (t.*mf) = loader.get_instance_proc_addr<PFN>(instance_ref, name);
-      });
+  spk::instance_dispatch_table instance_dispatch_table =
+      spk::load_instance_dispatch_table(loader.pvkGetInstanceProcAddr,
+                                        instance_ref);
 
   spk::debug_utils_messenger_ext_ref debug_utils_messenger_ext_ref;
 
@@ -112,19 +107,13 @@ int main(int argc, char** argv) {
   instance_dispatch_table.create_device(
       physical_device_refs.at(0), &device_create_info, nullptr, &device_ref);
 
-  spk::device_dispatch_table device_dispatch_table;
-
   auto pvkGetDeviceProcAddr =
       (PFN_vkGetDeviceProcAddr)instance_dispatch_table.get_instance_proc_addr(
           instance_ref, "vkGetDeviceProcAddr");
   CHECK(pvkGetDeviceProcAddr);
 
-  spk::visit_dispatch_table(
-      device_dispatch_table,
-      [&](spk::device_dispatch_table& t, auto mf, const char* name) {
-        using PFN = spk::strip_member_function_t<decltype(mf)>;
-        (t.*mf) = (PFN)pvkGetDeviceProcAddr(device_ref, name);
-      });
+  spk::device_dispatch_table device_dispatch_table =
+      spk::load_device_dispatch_table(pvkGetDeviceProcAddr, device_ref);
 
   device_dispatch_table.destroy_device(device_ref, nullptr);
   instance_dispatch_table.destroy_instance(instance_ref, nullptr);

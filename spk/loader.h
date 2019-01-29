@@ -8,12 +8,21 @@
 
 namespace spk {
 
+spk::global_dispatch_table load_global_dispatch_table(
+    PFN_vkGetInstanceProcAddr pvkGetInstanceProcAddr);
+
+spk::instance_dispatch_table load_instance_dispatch_table(
+    PFN_vkGetInstanceProcAddr pvkGetInstanceProcAddr,
+    spk::instance_ref instance);
+
+spk::device_dispatch_table load_device_dispatch_table(
+    PFN_vkGetDeviceProcAddr pvkGetDeviceProcAddr, spk::device_ref device);
+
 class loader {
  public:
   loader();
 
-  template <typename PFN>
-  PFN get_instance_proc_addr(VkInstance instance, const char* pName);
+  PFN_vkGetInstanceProcAddr pvkGetInstanceProcAddr;
 
   spk::version instance_version() const;
 
@@ -36,12 +45,6 @@ class loader {
     void operator()(void* handle);
   };
   std::unique_ptr<void, deleter> handle;
-  PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
 };
-
-template <typename PFN>
-PFN loader::get_instance_proc_addr(VkInstance instance, const char* pName) {
-  return (PFN)vkGetInstanceProcAddr(instance, pName);
-}
 
 }  // namespace spk

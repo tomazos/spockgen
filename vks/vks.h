@@ -180,6 +180,11 @@ struct FunctionPrototype : Entity {
 struct Param {
   std::string name;
   Type* type = nullptr;
+  std::vector<bool> optional;
+  bool get_optional(size_t i) const {
+    return optional.size() > i && optional.at(i);
+  }
+  std::optional<std::string> len;
 };
 
 struct DispatchTable;

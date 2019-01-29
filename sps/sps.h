@@ -36,11 +36,42 @@ struct Constant : Entity {
 
 struct Command;  // fwd decl
 
+enum class MemberFunctionKind {
+  SINGLE_HANDLE,
+  DOUBLE_HANDLE,
+  CONSTRUCTOR,
+  SINGLE_DESTRUCTOR,
+  DOUBLE_DESTRUCTOR
+};
+
+inline std::ostream& operator<<(std::ostream& o, MemberFunctionKind kind) {
+  switch (kind) {
+    case MemberFunctionKind::SINGLE_HANDLE:
+      return o << "SINGLE_HANDLE";
+    case MemberFunctionKind::DOUBLE_HANDLE:
+      return o << "DOUBLE_HANDLE";
+    case MemberFunctionKind::CONSTRUCTOR:
+      return o << "CONSTRUCTOR";
+    case MemberFunctionKind::SINGLE_DESTRUCTOR:
+      return o << "SINGLE_DESTRUCTOR";
+    case MemberFunctionKind::DOUBLE_DESTRUCTOR:
+      return o << "DOUBLE_DESTRUCTOR";
+    default:
+      return o << int(kind);
+  }
+}
+
+struct MemberFunction {
+  MemberFunctionKind kind;
+  const Command* command;
+};
+
 struct Handle : Entity {
   std::string fullname;
   const vks::Handle* handle;
   std::vector<std::string> aliases;
-  std::vector<Command*> commands;
+  std::vector<MemberFunction> member_functions;
+  std::set<const Handle*> parents;
 };
 
 struct Name : vks::Type {
@@ -117,6 +148,7 @@ struct Struct : Entity {
 };
 
 struct Param {
+  const vks::Param* param;
   std::string name;
   const vks::Type* vtype;
   const vks::Type* stype;

@@ -497,6 +497,16 @@ void parse_commands(vks::Registry& registry, TypeBackpatches& backpatches,
       CHECK_EQ(decl.name, param_in.name);
       vks::Param param_out;
       param_out.name = decl.name;
+
+      if (param_in.optional)
+        for (const std::string& opt :
+             dvc::split(",", param_in.optional.value())) {
+          CHECK(opt == "true" || opt == "false");
+          param_out.optional.push_back(opt == "true");
+        }
+
+      if (param_in.len) param_out.len = param_in.len;
+
       backpatches.add_command_param_backpatch(
           command_out, command_out->params.size(), decl.type);
       command_out->params.push_back(param_out);

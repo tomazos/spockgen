@@ -323,7 +323,7 @@ void write_header(const sps::Registry& registry) {
       if (ismultisuccess) {
         h.println("  [[nodiscard]] spk::result ", command->name, "(");
       } else if (isonesuccess) {
-        h.println("  void  ", command->name, "(");
+        h.println("  void ", command->name, "(");
       } else {
         h.println("  ", command->sreturn_type->to_string(), " ", command->name,
                   "(");
@@ -470,16 +470,172 @@ void write_header(const sps::Registry& registry) {
     h.println(" public:");
     h.println("  operator ", rname, "() const { return handle_; }");
     h.println();
-    for (const auto& command : handle->commands) {
-      if (command->command->platform)
-        h.println("#ifdef ", command->command->platform->protect);
-      h.println("  void ", command->name, "();");
-      if (command->command->platform) h.println("#endif");
-    }
+    for (int pass : {1, 2, 3})
+      for (const auto& member_function : handle->member_functions) {
+        sps::MemberFunctionKind kind = member_function.kind;
+        if (pass == 1 && kind != sps::MemberFunctionKind::CONSTRUCTOR) continue;
+        if (pass == 2 && kind != sps::MemberFunctionKind::SINGLE_HANDLE &&
+            kind != sps::MemberFunctionKind::DOUBLE_HANDLE)
+          continue;
+        if (pass == 3 && kind != sps::MemberFunctionKind::SINGLE_DESTRUCTOR &&
+            kind != sps::MemberFunctionKind::DOUBLE_DESTRUCTOR)
+          continue;
+
+        const sps::Command* command = member_function.command;
+
+        if (command->command->platform)
+          h.println("#ifdef ", command->command->platform->protect);
+
+        const vks::Type* sz;
+        const vks::Type* res;
+        if (command->resultvec(sz, res)) {
+          bool dhc = (kind == sps::MemberFunctionKind::DOUBLE_HANDLE ||
+                      kind == sps::MemberFunctionKind::DOUBLE_DESTRUCTOR);
+
+          h.println();
+          h.println("  std::vector<", res->to_string(), "> ", command->name,
+                    "(");
+          bool first = true;
+          for (size_t i = (dhc ? 2 : 1); i < command->params.size() - 2; ++i) {
+            const sps::Param& param = command->params.at(i);
+            if (param.stype->is_empty_enum()) continue;
+            if (first) {
+              first = false;
+            } else {
+              h.println(",");
+            }
+            h.print("    ", param.stype->make_declaration(param.name, 0));
+          }
+          h.println();
+          h.println("  ) { // ", kind);
+          h.print("    return dispatch_table().", command->name, "(");
+          first = true;
+          for (size_t i = 0; i < command->params.size() - 2; ++i) {
+            const sps::Param& param = command->params.at(i);
+            if (param.stype->is_empty_enum()) continue;
+            std::string pname;
+            if (i == 0 && !dhc)
+              pname = "handle_";
+            else if (i == 0 && dhc)
+              pname = "parent_" + dynamic_cast<const sps::Name*>(
+                                      command->params.at(0).stype)
+                                      ->entity->name;
+            else if (i == 1 && dhc)
+              pname = "handle_";
+            else
+              pname = param.name;
+            if (first) {
+              first = false;
+            } else {
+              h.print(",");
+            }
+
+            h.print(pname);
+          }
+          h.println(");");
+          h.println("  }");
+          h.println();
+        } else if (kind == sps::MemberFunctionKind::CONSTRUCTOR) {
+          h.println("  // TODO CONSTRUCTOR: ", command->name);
+        } else {
+          bool dhc = (kind == sps::MemberFunctionKind::DOUBLE_HANDLE ||
+                      kind == sps::MemberFunctionKind::DOUBLE_DESTRUCTOR);
+          bool isresult = (command->vreturn_type->to_string() == "VkResult");
+          bool ismultisuccess =
+              (isresult && command->command->successcodes.size() > 1);
+          bool isonesuccess = (isresult && !ismultisuccess);
+          bool isvoid = command->vreturn_type->to_string() == "void";
+          // bool isother = (!isvoid && !isresult);
+          if (ismultisuccess) {
+            h.println("  [[nodiscard]] spk::result ", command->name, "(");
+          } else if (isonesuccess) {
+            h.println("  void ", command->name, "(");
+          } else {
+            h.println("  ", command->sreturn_type->to_string(), " ",
+                      command->name, "(");
+          }
+          bool first = true;
+          for (size_t i = (dhc ? 2 : 1); i < command->params.size(); ++i) {
+            const sps::Param& param = command->params.at(i);
+            if (param.stype->is_empty_enum()) continue;
+            if (first) {
+              first = false;
+            } else {
+              h.print(",");
+            }
+            h.print("    ", param.stype->make_declaration(param.name, 0));
+          }
+          h.println();
+          h.println("  ) { // ", kind);
+          if (!isvoid && !isonesuccess)
+            h.print("    return dispatch_table().", command->name, "(");
+          else
+            h.print("    dispatch_table().", command->name, "(");
+          first = true;
+          for (size_t i = 0; i < command->params.size(); ++i) {
+            const sps::Param& param = command->params.at(i);
+            if (param.stype->is_empty_enum()) continue;
+            std::string pname;
+            if (i == 0 && !dhc)
+              pname = "handle_";
+            else if (i == 0 && dhc)
+              pname = "parent_" + dynamic_cast<const sps::Name*>(
+                                      command->params.at(0).stype)
+                                      ->entity->name;
+            else if (i == 1 && dhc)
+              pname = "handle_";
+            else
+              pname = param.name;
+            if (first) {
+              first = false;
+            } else {
+              h.print(",");
+            }
+            h.print(pname);
+          }
+          h.println(");");
+          h.println("  }");
+        }
+
+        if (command->command->platform) h.println("#endif");
+        h.println();
+      }
     h.println();
+    if (sname == "instance")
+      h.println(
+          "  const instance_dispatch_table& dispatch_table() { return "
+          "dispatch_table_; }");
+    else if (sname == "physical_device" ||
+             sname == "debug_report_callback_ext" ||
+             sname == "debug_utils_messenger_ext" ||
+             sname == "display_mode_khr" || sname == "surface_khr")
+      h.println(
+          "  const instance_dispatch_table& dispatch_table() { return "
+          "*dispatch_table_; }");
+    else if (sname == "device")
+      h.println(
+          "  const device_dispatch_table& dispatch_table() { return "
+          "dispatch_table_; }");
+    else
+      h.println(
+          "  const device_dispatch_table& dispatch_table() { return "
+          "*dispatch_table_; }");
     h.println(" private:");
     h.println("  ", rname, " handle_ = VK_NULL_HANDLE;");
-    h.println();
+    for (auto parent : handle->parents)
+      h.println("  ", parent->name, " parent_", parent->name,
+                " = VK_NULL_HANDLE;");
+    if (sname == "instance")
+      h.println("  const instance_dispatch_table dispatch_table_;");
+    else if (sname == "physical_device" ||
+             sname == "debug_report_callback_ext" ||
+             sname == "debug_utils_messenger_ext" ||
+             sname == "display_mode_khr" || sname == "surface_khr")
+      h.println("  const instance_dispatch_table* dispatch_table_;");
+    else if (sname == "device")
+      h.println("  const device_dispatch_table dispatch_table_;");
+    else
+      h.println("  const device_dispatch_table* dispatch_table_;");
     h.println("};");
     for (const auto& alias : handle->aliases) {
       h.println("using ", alias, " = ", handle->name, ";");
