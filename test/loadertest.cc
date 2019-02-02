@@ -80,41 +80,27 @@ int main(int argc, char** argv) {
 
   instance_create_info.set_next(&debug_utils_messenger_create_info);
 
-  spk::instance_ref instance_ref =
-      loader.create_instance(&instance_create_info, nullptr);
-  spk::instance_dispatch_table instance_dispatch_table =
-      spk::load_instance_dispatch_table(loader.pvkGetInstanceProcAddr,
-                                        instance_ref);
+  spk::instance instance(loader, &instance_create_info, nullptr);
 
-  spk::debug_utils_messenger_ext_ref debug_utils_messenger_ext_ref;
+  spk::debug_utils_messenger_ext_ref debug_utils_messenger_ext_ref =
+      instance.create_debug_utils_messenger_ext(
+          debug_utils_messenger_create_info, nullptr);
 
-  instance_dispatch_table.create_debug_utils_messenger_ext(
-      instance_ref, &debug_utils_messenger_create_info, nullptr,
-      &debug_utils_messenger_ext_ref);
+  spk::debug_utils_messenger_ext debug_utils_messenger_ext(
+      debug_utils_messenger_ext_ref, instance, instance.dispatch_table(),
+      nullptr);
 
-  uint32_t physical_device_count;
-  CHECK(spk::result::success ==
-        instance_dispatch_table.enumerate_physical_devices(
-            instance_ref, &physical_device_count, nullptr));
-  std::vector<spk::physical_device_ref> physical_device_refs(
-      physical_device_count);
-  CHECK(spk::result::success ==
-        instance_dispatch_table.enumerate_physical_devices(
-            instance_ref, &physical_device_count, physical_device_refs.data()));
-  spk::device_create_info device_create_info;
-  device_create_info.set_pp_enabled_layer_names({layers, 1});
-  spk::device_ref device_ref;
-  instance_dispatch_table.create_device(
-      physical_device_refs.at(0), &device_create_info, nullptr, &device_ref);
+  for (spk::physical_device_ref physical_device_ref :
+       instance.enumerate_physical_devices()) {
+    spk::physical_device physical_device(physical_device_ref,
+                                         instance.dispatch_table(), nullptr);
 
-  auto pvkGetDeviceProcAddr =
-      (PFN_vkGetDeviceProcAddr)instance_dispatch_table.get_instance_proc_addr(
-          instance_ref, "vkGetDeviceProcAddr");
-  CHECK(pvkGetDeviceProcAddr);
+    LOG(ERROR) << "PHYSICAL DEVICE: "
+               << physical_device.get_physical_device_properties()
+                      .device_name()
+                      .data();
 
-  spk::device_dispatch_table device_dispatch_table =
-      spk::load_device_dispatch_table(pvkGetDeviceProcAddr, device_ref);
-
-  device_dispatch_table.destroy_device(device_ref, nullptr);
-  instance_dispatch_table.destroy_instance(instance_ref, nullptr);
+    spk::device_create_info device_create_info;
+    spk::device device(physical_device, &device_create_info, nullptr);
+  }
 }

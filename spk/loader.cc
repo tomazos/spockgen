@@ -6,6 +6,41 @@
 
 namespace spk {
 
+instance::instance(spk::loader& loader,
+                   spk::instance_create_info const* create_info,
+                   spk::allocation_callbacks const* allocation_callbacks)
+    : handle_(loader.create_instance(create_info, allocation_callbacks)),
+      dispatch_table_(
+          load_instance_dispatch_table(loader.pvkGetInstanceProcAddr, handle_)),
+      allocation_callbacks_(allocation_callbacks) {}
+
+spk::device_ref create_device(
+    spk::physical_device& physical_device,
+    spk::device_create_info const* create_info,
+    spk::allocation_callbacks const* allocation_callbacks) {
+  spk::device_ref device;
+  physical_device.dispatch_table().create_device(physical_device, create_info,
+                                                 allocation_callbacks, &device);
+  return device;
+}
+
+device_dispatch_table load_device_dispatch_table(
+    spk::physical_device& physical_device, spk::device_ref device) {
+  auto pvkGetDeviceProcAddr =
+      (PFN_vkGetDeviceProcAddr)physical_device.dispatch_table()
+          .get_instance_proc_addr(physical_device.dispatch_table().instance,
+                                  "vkGetDeviceProcAddr");
+  return load_device_dispatch_table(pvkGetDeviceProcAddr, device);
+}
+
+device::device(spk::physical_device& physical_device,
+               spk::device_create_info const* create_info,
+               spk::allocation_callbacks const* allocation_callbacks)
+    : handle_(
+          create_device(physical_device, create_info, allocation_callbacks)),
+      dispatch_table_(load_device_dispatch_table(physical_device, handle_)),
+      allocation_callbacks_(allocation_callbacks) {}
+
 loader::loader() : handle(::dlopen("libvulkan.so", RTLD_NOW | RTLD_GLOBAL)) {
   CHECK(handle != nullptr) << "Unable to dlopen libvulkan.so because "
                            << ::dlerror();
@@ -32,7 +67,15 @@ spk::version loader::instance_version() const {
 }
 
 std::vector<spk::layer_properties> loader::instance_layer_properties() const {
-  return global_dispatch_table.enumerate_instance_layer_properties();
+  uint32_t c;
+  CHECK_EQ(
+      global_dispatch_table.enumerate_instance_layer_properties(&c, nullptr),
+      spk::result::success);
+  std::vector<spk::layer_properties> v(c);
+  CHECK_EQ(
+      global_dispatch_table.enumerate_instance_layer_properties(&c, v.data()),
+      spk::result::success);
+  return v;
 }
 
 std::vector<spk::extension_properties> loader::instance_extension_properties()
@@ -47,8 +90,15 @@ std::vector<spk::extension_properties> loader::instance_extension_properties(
 
 std::vector<spk::extension_properties> loader::instance_extension_properties_(
     const char* layer_name) const {
-  return global_dispatch_table.enumerate_instance_extension_properties(
-      layer_name);
+  uint32_t c;
+  CHECK_EQ(global_dispatch_table.enumerate_instance_extension_properties(
+               layer_name, &c, nullptr),
+           spk::result::success);
+  std::vector<spk::extension_properties> v(c);
+  CHECK_EQ(global_dispatch_table.enumerate_instance_extension_properties(
+               layer_name, &c, v.data()),
+           spk::result::success);
+  return v;
 }
 
 spk::instance_ref loader::create_instance(
@@ -57,47 +107,6 @@ spk::instance_ref loader::create_instance(
   spk::instance_ref instance_ref;
   global_dispatch_table.create_instance(pCreateInfo, pAllocator, &instance_ref);
   return instance_ref;
-}
-
-spk::global_dispatch_table load_global_dispatch_table(
-    PFN_vkGetInstanceProcAddr pvkGetInstanceProcAddr) {
-  spk::global_dispatch_table global_dispatch_table;
-  spk::visit_dispatch_table(
-      global_dispatch_table,
-      [pvkGetInstanceProcAddr](spk::global_dispatch_table& t, auto mf,
-                               const char* name) {
-        using PFN = strip_member_function_t<decltype(mf)>;
-        (t.*mf) = (PFN)pvkGetInstanceProcAddr(VK_NULL_HANDLE, name);
-      });
-  return global_dispatch_table;
-}
-
-spk::instance_dispatch_table load_instance_dispatch_table(
-    PFN_vkGetInstanceProcAddr pvkGetInstanceProcAddr,
-    spk::instance_ref instance) {
-  spk::instance_dispatch_table instance_dispatch_table;
-  spk::visit_dispatch_table(
-      instance_dispatch_table,
-      [pvkGetInstanceProcAddr, instance](spk::instance_dispatch_table& t,
-                                         auto mf, const char* name) {
-        using PFN = spk::strip_member_function_t<decltype(mf)>;
-        (t.*mf) = (PFN)pvkGetInstanceProcAddr(instance, name);
-      });
-  return instance_dispatch_table;
-}
-
-spk::device_dispatch_table load_device_dispatch_table(
-    PFN_vkGetDeviceProcAddr pvkGetDeviceProcAddr, spk::device_ref device) {
-  spk::device_dispatch_table device_dispatch_table;
-
-  spk::visit_dispatch_table(
-      device_dispatch_table,
-      [pvkGetDeviceProcAddr, device](spk::device_dispatch_table& t, auto mf,
-                                     const char* name) {
-        using PFN = spk::strip_member_function_t<decltype(mf)>;
-        (t.*mf) = (PFN)pvkGetDeviceProcAddr(device, name);
-      });
-  return device_dispatch_table;
 }
 
 }  // namespace spk

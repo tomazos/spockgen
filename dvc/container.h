@@ -23,4 +23,20 @@ void sort(Container& container) {
   std::sort(container.begin(), container.end());
 }
 
+template <typename Container, typename T>
+typename Container::value_type& find_or_die(Container& container,
+                                            const T& value) {
+  auto it = std::find(container.begin(), container.end(), value);
+  CHECK(it != container.end()) << "find_or_die failed";
+  return *it;
+}
+
+template <typename Container, typename T>
+const typename Container::value_type& find_or_die(const Container& container,
+                                                  const T& value) {
+  auto it = std::find(container.begin(), container.end(), value);
+  CHECK(it != container.end()) << "find_or_die failed";
+  return *it;
+}
+
 }  // namespace dvc

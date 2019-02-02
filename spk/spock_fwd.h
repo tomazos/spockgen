@@ -99,16 +99,44 @@ class string_array_ptr {
 };
 
 template <typename T>
-class array_view {
+class array_ptr {
  public:
-  array_view(T* ptr, size_t size) : ptr_(ptr), size_(size) {}
+  array_ptr(T* ptr, size_t size) : ptr_(ptr), size_(size) {}
 
-  T* get() const { return ptr_; }
+  T* data() const { return ptr_; }
   size_t size() const { return size_; }
 
  private:
   T* ptr_;
   size_t size_;
+};
+
+template <typename T>
+class array_view {
+ public:
+  array_view() : ptr_(nullptr), size_(0) {}
+  array_view(T* ptr, size_t size) : ptr_(ptr), size_(size) {}
+  template <size_t N>
+  array_view(T (&array)[N]) : ptr_(array), size_(N) {}
+  template <size_t N>
+  array_view(const std::array<T, N>& array) : ptr_(array.data()), size_(N) {}
+  array_view(const std::vector<T>& vector)
+      : ptr_(vector.data()), size_(vector.size()) {}
+
+  T* data() const { return ptr_; }
+  size_t size() const { return size_; }
+
+ private:
+  T* ptr_;
+  size_t size_;
+};
+
+template <>
+class array_view<const void> : public std::string_view {
+ public:
+  array_view(const void* ptr, size_t sz)
+      : std::string_view((const char*)ptr, sz) {}
+  using std::string_view::string_view;
 };
 
 #define SPK_DEFINE_BITMASK_BITWISE_OPS(bitmask)                        \

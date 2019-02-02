@@ -8,16 +8,6 @@
 
 namespace spk {
 
-spk::global_dispatch_table load_global_dispatch_table(
-    PFN_vkGetInstanceProcAddr pvkGetInstanceProcAddr);
-
-spk::instance_dispatch_table load_instance_dispatch_table(
-    PFN_vkGetInstanceProcAddr pvkGetInstanceProcAddr,
-    spk::instance_ref instance);
-
-spk::device_dispatch_table load_device_dispatch_table(
-    PFN_vkGetDeviceProcAddr pvkGetDeviceProcAddr, spk::device_ref device);
-
 class loader {
  public:
   loader();

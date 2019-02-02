@@ -36,42 +36,31 @@ struct Constant : Entity {
 
 struct Command;  // fwd decl
 
-enum class MemberFunctionKind {
-  SINGLE_HANDLE,
-  DOUBLE_HANDLE,
-  CONSTRUCTOR,
-  SINGLE_DESTRUCTOR,
-  DOUBLE_DESTRUCTOR
-};
-
-inline std::ostream& operator<<(std::ostream& o, MemberFunctionKind kind) {
-  switch (kind) {
-    case MemberFunctionKind::SINGLE_HANDLE:
-      return o << "SINGLE_HANDLE";
-    case MemberFunctionKind::DOUBLE_HANDLE:
-      return o << "DOUBLE_HANDLE";
-    case MemberFunctionKind::CONSTRUCTOR:
-      return o << "CONSTRUCTOR";
-    case MemberFunctionKind::SINGLE_DESTRUCTOR:
-      return o << "SINGLE_DESTRUCTOR";
-    case MemberFunctionKind::DOUBLE_DESTRUCTOR:
-      return o << "DOUBLE_DESTRUCTOR";
-    default:
-      return o << int(kind);
-  }
-}
+struct Handle;
 
 struct MemberFunction {
-  MemberFunctionKind kind;
-  const Command* command;
+  const Command* command = nullptr;
+  const Handle* main_handle = nullptr;
+  bool parent_dispatch = false;
+  bool result = false;
+  bool resultvec_incomplete = false;
+  bool resultvec_void = false;
+  const vks::Type* sz = nullptr;
+  const vks::Type* res = nullptr;
+  std::set<size_t> szptrs;
+
+  inline size_t begin() const;
+  inline size_t end() const;
 };
 
 struct Handle : Entity {
   std::string fullname;
   const vks::Handle* handle;
   std::vector<std::string> aliases;
-  std::vector<MemberFunction> member_functions;
-  std::set<const Handle*> parents;
+  std::vector<const MemberFunction*> member_functions;
+  const Command* destructor = nullptr;
+  bool destructor_parent;
+  const Handle* parent = nullptr;
 };
 
 struct Name : vks::Type {
@@ -152,6 +141,14 @@ struct Param {
   std::string name;
   const vks::Type* vtype;
   const vks::Type* stype;
+  const vks::Type* asref() const {
+    if (stype->to_string() == "void const *") return nullptr;
+    if (param->len) return nullptr;
+    auto ptr = dynamic_cast<const vks::Pointer*>(stype);
+    if (!ptr) return nullptr;
+    if (!param->get_optional(0)) return ptr->T;
+    return nullptr;
+  }
 };
 
 struct Command : Entity {
@@ -161,7 +158,26 @@ struct Command : Entity {
   std::vector<const Enumerator*> successcodes, errorcodes;
   std::vector<Param> params;
   std::vector<std::string> aliases;
-  bool resultvec(const vks::Type*& sz, const vks::Type*& res) const {
+
+  bool resultvec_void(const vks::Type*& sz, const vks::Type*& res) const {
+    if (sreturn_type->to_string() != "void") return false;
+    auto szptr =
+        dynamic_cast<const vks::Pointer*>(params.at(params.size() - 2).stype);
+    CHECK(szptr);
+    CHECK(szptr->T->to_string() == "uint32_t" ||
+          szptr->T->to_string() == "size_t");
+    auto resptr =
+        dynamic_cast<const vks::Pointer*>(params.at(params.size() - 1).stype);
+    CHECK(resptr);
+
+    if (resptr->T->to_string() == "void") return false;
+
+    sz = szptr->T;
+    res = resptr->T;
+
+    return true;
+  }
+  bool resultvec_incomplete(const vks::Type*& sz, const vks::Type*& res) const {
     bool has_incomplete = false;
     for (const Enumerator* successcode : successcodes)
       if (successcode->name == "incomplete") has_incomplete = true;
@@ -184,6 +200,13 @@ struct Command : Entity {
     return true;
   }
 };
+
+inline size_t MemberFunction::begin() const { return parent_dispatch ? 2 : 1; }
+inline size_t MemberFunction::end() const {
+  if (result) return command->params.size() - 1;
+  if (resultvec_incomplete || resultvec_void) return command->params.size() - 2;
+  return command->params.size();
+}
 
 struct DispatchTable {
   const vks::DispatchTable* dispatch_table;
@@ -220,6 +243,12 @@ struct Registry {
 
  private:
   std::array<DispatchTable*, 3> dispatch_tables_;
+};
+
+inline const vks::Type* get_pointee(const vks::Type* t) {
+  auto p = dynamic_cast<const vks::Pointer*>(t);
+  if (!p) return nullptr;
+  return p->T;
 };
 
 }  // namespace sps

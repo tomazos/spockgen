@@ -3,6 +3,7 @@
 #include <glog/logging.h>
 #include <cctype>
 #include <clocale>
+#include <map>
 #include <set>
 
 #include "dvc/container.h"
@@ -314,11 +315,6 @@ void build_handle(sps::Registry& sreg, const vks::Registry& vreg) {
   for (auto handle : sreg.handles) {
     dvc::insert_or_die(sreg.handle_map, handle->handle, handle);
   }
-
-  for (auto handle : sreg.handles) {
-    for (auto parent : handle->handle->parents)
-      handle->parents.insert(sreg.handle_map.at(parent));
-  }
 }
 
 void build_struct(sps::Registry& sreg, const vks::Registry& vreg) {
@@ -399,6 +395,161 @@ void build_struct(sps::Registry& sreg, const vks::Registry& vreg) {
   }
 }
 
+std::set<std::string> manual_translation_commands = {
+    "enumerate_instance_layer_properties",
+    "enumerate_instance_extension_properties",
+    "create_instance",
+    "enumerate_instance_version",
+    "get_instance_proc_addr",
+    "get_device_proc_addr",
+    "destroy_descriptor_update_template_khr",
+    "destroy_sampler_ycbcr_conversion_khr",
+    "create_device",
+    "get_physical_device_generated_commands_properties_nvx",
+    "create_graphics_pipelines",
+    "allocate_command_buffers",
+    "allocate_descriptor_sets",
+    "create_compute_pipelines",
+    "create_shared_swapchains_khr",
+    "debug_report_message_ext",
+    "enumerate_device_extension_properties",
+    "set_hdr_metadata_ext",
+    "unregister_objects_nvx",
+    "register_objects_nvx",
+    "cmd_bind_vertex_buffers",
+    "get_pipeline_cache_data",
+    "get_shader_info_amd",
+    "get_query_pool_results",
+    "get_validation_cache_data_ext"};
+
+std::map<std::string, std::string> handle_parents = {
+    {"instance", ""},
+    {"device", ""},
+    {"descriptor_update_template", "device"},
+    {"display_khr", "physical_device"},
+    {"buffer", "device"},
+    {"surface_khr", "instance"},
+    {"event", "device"}};
+
+const sps::Handle* get_handle(const vks::Type* t) {
+  if (t == nullptr) return nullptr;
+  auto n = dynamic_cast<const sps::Name*>(t);
+  if (!n) return nullptr;
+  return dynamic_cast<const sps::Handle*>(n->entity);
+};
+
+const sps::MemberFunction* classify_command(sps::Registry& sreg,
+                                            const vks::Registry& vreg,
+                                            const sps::Command* command) {
+  sps::MemberFunction* clas = new sps::MemberFunction;
+  clas->command = command;
+
+  CHECK(command->params.size() >= 1);
+  std::string name = command->name;
+  const sps::Handle* dispatch_handle = get_handle(command->params.at(0).stype);
+  if (!dispatch_handle && manual_translation_commands.count(name))
+    return nullptr;
+  CHECK(dispatch_handle) << name;
+  const sps::Handle* second_handle = nullptr;
+  if (command->params.size() > 1) {
+    second_handle = get_handle(command->params.at(1).stype);
+    if (second_handle) {
+      std::string p = dispatch_handle->fullname;
+      std::string s = second_handle->fullname;
+      if (handle_parents.count(s)) {
+        if (handle_parents.at(s) != p) second_handle = nullptr;
+      } else {
+        handle_parents[s] = p;
+      }
+    }
+  }
+
+  if (manual_translation_commands.count(name)) return nullptr;
+
+  clas->main_handle = second_handle ? second_handle : dispatch_handle;
+  clas->parent_dispatch = second_handle;
+
+  if (dvc::startswith(name, "destroy_")) {
+    CHECK_EQ(name, "destroy_" + clas->main_handle->fullname);
+    sps::Handle* handle = dvc::find_or_die(sreg.handles, clas->main_handle);
+    CHECK(handle->destructor == nullptr)
+        << name << " " << handle->destructor->name;
+    handle->destructor = command;
+    handle->destructor_parent = bool(second_handle);
+    return nullptr;
+  }
+
+  std::vector<size_t> nonconst_params;
+  for (size_t i = 0; i < command->params.size(); ++i) {
+    const sps::Param& param = command->params.at(i);
+    const vks::Type* type = sps::get_pointee(param.stype);
+    if (!type) continue;
+    if (dynamic_cast<const vks::Const*>(type)) continue;
+
+    if (auto nm = dynamic_cast<const sps::Name*>(type)) {
+      const sps::Entity* entity = nm->entity;
+      (void)entity;
+    } else {
+      continue;
+    }
+    nonconst_params.push_back(i);
+  }
+  CHECK(nonconst_params.size() < 2) << name;
+  if (!nonconst_params.empty()) {
+    CHECK_EQ(nonconst_params.at(0), command->params.size() - 1) << name;
+    const sps::Param& last_param = command->params.back();
+    if (last_param.param->len) {
+      if (command->params.at(command->params.size() - 2).name !=
+          last_param.param->len.value())
+        LOG(FATAL) << last_param.param->len.value() << " " << name;
+      else {
+        if (command->resultvec_incomplete(clas->sz, clas->res)) {
+          clas->resultvec_incomplete = true;
+        } else if (command->resultvec_void(clas->sz, clas->res)) {
+          clas->resultvec_void = true;
+        } else {
+          LOG(FATAL) << "resultvec: " << name;
+        }
+      }
+    } else {
+      CHECK(!last_param.param->get_optional(0)) << name;
+      CHECK(command->sreturn_type->to_string() == "void")
+          << command->sreturn_type->to_string() << " " << name;
+      clas->result = true;
+      clas->res = sps::get_pointee(last_param.stype);
+      CHECK(clas->res);
+    }
+  }
+
+  std::unordered_set<std::string> param_names;
+  for (const sps::Param& param : command->params)
+    param_names.insert(param.name);
+  for (const sps::Param& param : command->params)
+    if (param.param->len)
+      if (!param_names.count(param.param->len.value()))
+        LOG(ERROR) << name << " " << param.name << " "
+                   << param.param->len.value();
+
+  std::map<size_t, std::vector<size_t>> szptr_pairs;
+
+  for (size_t i = clas->begin(); i < clas->end(); ++i)
+    for (size_t j = clas->begin(); j < clas->end(); ++j) {
+      if (i == j) continue;
+      const vks::Param* a = command->params.at(i).param;
+      const vks::Param* b = command->params.at(j).param;
+
+      if (b->len && b->len.value() == a->name) szptr_pairs[i].push_back(j);
+    }
+
+  for (auto x : szptr_pairs) {
+    if (x.second.size() != 1 || x.second.at(0) != x.first + 1)
+      LOG(FATAL) << name;
+    clas->szptrs.insert(x.first);
+  }
+
+  return clas;
+}
+
 void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
   for (const sps::Enumeration* enumeration : sreg.enumerations) {
     if (enumeration->name != "result") continue;
@@ -430,6 +581,15 @@ void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
 
     for (const vks::Constant* successcode : vcommand->successcodes)
       scommand->successcodes.push_back(sreg.codemap.at(successcode));
+
+    if (scommand->successcodes.size() == 1) {
+      CHECK(scommand->command->return_type->to_string() == "VkResult");
+      auto e = new vks::Entity;
+      e->name = "void";
+      auto n = new vks::Name;
+      n->entity = e;
+      scommand->sreturn_type = n;
+    }
     for (const vks::Constant* errorcode : vcommand->errorcodes)
       scommand->errorcodes.push_back(sreg.codemap.at(errorcode));
 
@@ -454,56 +614,77 @@ void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
     }
   }
 
-  auto get_handle = [](const vks::Type* t) -> const sps::Handle* {
-    auto n = dynamic_cast<const sps::Name*>(t);
-    if (!n) return nullptr;
-    return dynamic_cast<const sps::Handle*>(n->entity);
-  };
-
-  auto get_ptr_handle = [&](const vks::Type* t) -> const sps::Handle* {
-    auto p = dynamic_cast<const vks::Pointer*>(t);
-    if (!p) return nullptr;
-    return get_handle(p->T);
-  };
+  //  auto get_handle = [](const vks::Type* t) -> const sps::Handle* {
+  //    auto n = dynamic_cast<const sps::Name*>(t);
+  //    if (!n) return nullptr;
+  //    return dynamic_cast<const sps::Handle*>(n->entity);
+  //  };
+  //
+  //  auto get_ptr_handle = [&](const vks::Type* t) -> const sps::Handle* {
+  //    auto p = dynamic_cast<const vks::Pointer*>(t);
+  //    if (!p) return nullptr;
+  //    return get_handle(p->T);
+  //  };
 
   for (const sps::Command* command : sreg.commands) {
-    if (command->params.size() == 0) return;
-    const sps::Handle* chandle = nullptr;
-    sps::MemberFunctionKind kind;
-    if (dvc::startswith(command->name, "create") ||
-        dvc::startswith(command->name, "allocate")) {
-      chandle = get_ptr_handle(command->params.back().stype);
-      kind = sps::MemberFunctionKind::CONSTRUCTOR;
-      CHECK(chandle);
-    } else {
-      const sps::Handle* first_handle = get_handle(command->params.at(0).stype);
-      if (!first_handle) continue;
-      const sps::Handle* second_handle = nullptr;
-      if (command->params.size() > 1) {
-        second_handle = get_handle(command->params.at(1).stype);
-      }
-      if (second_handle &&
-          (!second_handle->handle->parents.count(first_handle->handle) ||
-           !command->params.at(1).param->get_optional(0)))
-        second_handle = nullptr;
+    const sps::MemberFunction* clas = classify_command(sreg, vreg, command);
+    if (!clas) continue;
+    sps::Handle* handle = sreg.handle_map.at(clas->main_handle->handle);
+    handle->member_functions.push_back(clas);
+    //    CHECK(chandle == handle);
+    //    if (command->params.size() == 0) return;
+    //    const sps::Handle* chandle = nullptr;
+    //    sps::MemberFunctionKind kind;
+    //    if (dvc::startswith(command->name, "create_") ||
+    //        dvc::startswith(command->name, "allocate_")) {
+    //      chandle = get_ptr_handle(command->params.back().stype);
+    //      kind = sps::MemberFunctionKind::CONSTRUCTOR;
+    //      CHECK(chandle);
+    //    } else {
+    //      const sps::Handle* first_handle =
+    //      get_handle(command->params.at(0).stype); if (!first_handle)
+    //      continue; const sps::Handle* second_handle = nullptr; if
+    //      (command->params.size() > 1) {
+    //        second_handle = get_handle(command->params.at(1).stype);
+    //      }
+    //      if (second_handle &&
+    //          (!second_handle->handle->parents.count(first_handle->handle)
+    //          ||
+    //           !command->params.at(1).param->get_optional(0)))
+    //        second_handle = nullptr;
+    //
+    //      if (dvc::startswith(command->name, "destroy_")) {
+    //        kind = second_handle ?
+    //        sps::MemberFunctionKind::DOUBLE_DESTRUCTOR
+    //                             :
+    //                             sps::MemberFunctionKind::SINGLE_DESTRUCTOR;
+    //
+    //      } else {
+    //        kind = second_handle ? sps::MemberFunctionKind::DOUBLE_HANDLE
+    //                             : sps::MemberFunctionKind::SINGLE_HANDLE;
+    //      }
+    //      chandle = second_handle ? second_handle : first_handle;
+    //    }
+    //
+    //    sps::Handle* handle = sreg.handle_map.at(chandle->handle);
+    //    CHECK(chandle == handle);
+    //    sps::MemberFunction member_function;
+    //    member_function.kind = kind;
+    //    member_function.command = command;
+    //    handle->member_functions.push_back(member_function);
+  }
 
-      if (dvc::startswith(command->name, "destroy_")) {
-        kind = second_handle ? sps::MemberFunctionKind::DOUBLE_DESTRUCTOR
-                             : sps::MemberFunctionKind::SINGLE_DESTRUCTOR;
+  std::unordered_map<std::string, const sps::Handle*> handle_names;
+  handle_names[""] = nullptr;
+  for (sps::Handle* handle : sreg.handles)
+    handle_names[handle->fullname] = handle;
+  for (sps::Handle* handle : sreg.handles)
+    if (handle_parents.count(handle->fullname))
+      handle->parent = handle_names.at(handle_parents.at(handle->fullname));
 
-      } else {
-        kind = second_handle ? sps::MemberFunctionKind::DOUBLE_HANDLE
-                             : sps::MemberFunctionKind::SINGLE_HANDLE;
-      }
-      chandle = second_handle ? second_handle : first_handle;
-    }
-
-    sps::Handle* handle = sreg.handle_map.at(chandle->handle);
-    CHECK(chandle == handle);
-    sps::MemberFunction member_function;
-    member_function.kind = kind;
-    member_function.command = command;
-    handle->member_functions.push_back(member_function);
+  for (const sps::Handle* handle : sreg.handles) {
+    if (handle->destructor == nullptr)
+      LOG(ERROR) << "no destructor: " << handle->fullname;
   }
 }
 
