@@ -109,6 +109,21 @@ std::string translate_member_name(const std::string& name) {
   return mname;
 }
 
+std::string translate_member_function_name(const std::string& handle,
+                                           const std::string& command) {
+  std::string name = command;
+  if (dvc::startswith(command, "get_")) name = name.substr(4);
+  auto pos = name.find(handle + "_");
+  if (pos != std::string::npos)
+    name = name.substr(0, pos) + name.substr(pos + (handle + "_").size());
+  pos = name.find("_" + handle);
+  if (pos != std::string::npos)
+    name = name.substr(0, pos) + name.substr(pos + ("_" + handle).size());
+  if (handle == "command_buffer" && dvc::startswith(name, "cmd_"))
+    name = name.substr(4);
+  return name;
+}
+
 std::string common_prefix(const std::vector<std::string>& names) {
   if (names.size() < 2) return "";
   for (size_t i = 0; i <= names[0].size(); i++) {
@@ -406,23 +421,34 @@ std::set<std::string> manual_translation_commands = {
     "get_device_proc_addr",
     "destroy_descriptor_update_template_khr",
     "destroy_sampler_ycbcr_conversion_khr",
-    "create_device",
     "debug_report_message_ext",
-    //"create_display_mode_khr",
 };
 
 }  // namespace
 namespace sps {
 std::vector<sps::ManualTranslation> Registry::manual_translations = {
+    {"physical_device", "create_device",
 
+     R"(
+    inline spk::device create_device(
+        spk::device_create_info const& pCreateInfo);
+)",
+     R"(inline spk::device physical_device::create_device(
+    spk::device_create_info const& create_info) {
+  spk::device_ref device_ref;
+  dispatch_table().create_device(handle_, &create_info, allocation_callbacks_,
+                                 &device_ref);
+  return device(device_ref, *this, allocation_callbacks_);
+}
+)"},
     {"physical_device", "get_physical_device_generated_commands_properties_nvx",
      R"(
 inline std::pair<spk::device_generated_commands_features_nvx,spk::device_generated_commands_limits_nvx>
-get_physical_device_generated_commands_properties_nvx();
+generated_commands_properties_nvx();
 )",
      R"(
 inline std::pair<spk::device_generated_commands_features_nvx,spk::device_generated_commands_limits_nvx>
-physical_device::get_physical_device_generated_commands_properties_nvx() {
+physical_device::generated_commands_properties_nvx() {
   std::pair<spk::device_generated_commands_features_nvx,spk::device_generated_commands_limits_nvx> result_;
   dispatch_table().get_physical_device_generated_commands_properties_nvx(handle_, &result_.first, &result_.second);
   return result_;
@@ -603,10 +629,11 @@ const sps::Handle* get_handle(const vks::Type* t) {
   return dynamic_cast<const sps::Handle*>(n->entity);
 };
 
-const sps::MemberFunction* classify_command(sps::Registry& sreg,
-                                            const vks::Registry& vreg,
-                                            const sps::Command* command) {
+sps::MemberFunction* classify_command(sps::Registry& sreg,
+                                      const vks::Registry& vreg,
+                                      const sps::Command* command) {
   sps::MemberFunction* clas = new sps::MemberFunction;
+  clas->name = command->name;
   clas->command = command;
 
   CHECK(command->params.size() >= 1);
@@ -801,9 +828,10 @@ void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
   }
 
   for (const sps::Command* command : sreg.commands) {
-    const sps::MemberFunction* clas = classify_command(sreg, vreg, command);
+    sps::MemberFunction* clas = classify_command(sreg, vreg, command);
     if (!clas) continue;
     sps::Handle* handle = sreg.handle_map.at(clas->main_handle->handle);
+    clas->name = translate_member_function_name(handle->fullname, clas->name);
     handle->member_functions.push_back(clas);
   }
 
@@ -818,6 +846,13 @@ void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
   for (const sps::Handle* handle : sreg.handles) {
     if (handle->destructor == nullptr)
       LOG(ERROR) << "no destructor: " << handle->fullname;
+  }
+
+  for (sps::Handle* handle : sreg.handles) {
+    std::sort(handle->member_functions.begin(), handle->member_functions.end(),
+              [](const sps::MemberFunction* a, const sps::MemberFunction* b) {
+                return a->name < b->name;
+              });
   }
 }
 

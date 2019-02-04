@@ -26,12 +26,10 @@ cc_library(
   srcs = [
       "loader.cc",
   ],
-  deps = [
-      "//SDL2",
-  ],
   linkopts = [
     "-ldl",
     "-lglog",
+    "-lSDL2",
   ],
 )
 

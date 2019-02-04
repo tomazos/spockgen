@@ -2,8 +2,8 @@
 #include <glog/logging.h>
 #include <functional>
 
-#include "SDL2/SDL.h"
-#include "SDL2/SDL_vulkan.h"
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_vulkan.h>
 #include "spk/loader.h"
 #include "spk/spock.h"
 
@@ -53,12 +53,34 @@ int main(int argc, char** argv) {
 
   if (SDL_Init(SDL_INIT_VIDEO) != 0) LOG(FATAL) << SDL_GetError();
 
+  int num_video_drivers = SDL_GetNumVideoDrivers();
+
+  LOG(ERROR) << "num_video_drivers = " << num_video_drivers;
+  for (int i = 0; i < num_video_drivers; i++) {
+    LOG(ERROR) << "DRIVER #" << i << " " << SDL_GetVideoDriver(i);
+  }
+
+  LOG(ERROR) << "CURRENT: " << SDL_GetCurrentVideoDriver();
+
+  int num_displays = SDL_GetNumVideoDisplays();
+  LOG(ERROR) << "num_displays = " << num_displays;
+  for (int i = 0; i < num_displays; i++) {
+    SDL_Rect rect;
+    CHECK(!SDL_GetDisplayBounds(i, &rect));
+    LOG(ERROR) << "DISPLAY #" << i << " " << rect.x << " " << rect.y << " "
+               << rect.w << " " << rect.h;
+  }
+
   spk::loader loader;
 
   SDL_Window* window = SDL_CreateWindow(
       "loadertest", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0,
       SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_VULKAN);
   if (!window) LOG(FATAL) << SDL_GetError();
+
+  int w, h;
+  SDL_GetWindowSize(window, &w, &h);
+  LOG(ERROR) << "SDL SIZE: " << w << " " << h;
 
   const std::vector<std::string> extensions = get_sdl_extensions(window);
 
@@ -128,12 +150,22 @@ int main(int argc, char** argv) {
       instance.enumerate_physical_devices();
   spk::physical_device& physical_device = physical_devices.at(0);
   std::vector<spk::queue_family_properties> queue_family_properties_vector =
-      physical_device.get_physical_device_queue_family_properties();
+      physical_device.queue_family_properties();
 
   for (const auto& queue_family_properties : queue_family_properties_vector) {
     LOG(ERROR) << "queue_family_properties.queue_flags() = "
                << queue_family_properties.queue_flags();
   }
+
+  spk::bool32_t b;
+  physical_device.surface_support_khr(0, surface, b);
+  CHECK(b);
+
+  spk::surface_capabilities_khr surface_capabilities =
+      physical_device.surface_capabilities_khr(surface);
+
+  LOG(ERROR) << "HEIGHT = " << surface_capabilities.current_extent().height();
+  LOG(ERROR) << "WIDTH = " << surface_capabilities.current_extent().width();
 
   spk::device_create_info device_create_info;
   spk::device_queue_create_info device_queue_create_info;
@@ -143,5 +175,28 @@ int main(int argc, char** argv) {
 
   device_create_info.set_queue_create_infos({&device_queue_create_info, 1});
 
-  spk::device device(physical_device, device_create_info, nullptr);
+  spk::device device = physical_device.create_device(device_create_info);
+
+  while (1) {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+      switch (event.type) {
+        case SDL_QUIT:
+          goto done;
+        case SDL_KEYDOWN:
+          if (event.key.keysym.sym == SDLK_q) goto done;
+          LOG(ERROR) << "KEYDOWN SCANCODE '"
+                     << SDL_GetScancodeName(event.key.keysym.scancode)
+                     << "' KEYCODE '" << SDL_GetKeyName(event.key.keysym.sym)
+                     << "'";
+          break;
+        case SDL_KEYUP:
+          LOG(ERROR) << "KEYUP";
+          break;
+      }
+    }
+    // TODO: show frame
+  }
+done:
+  device.wait_idle();
 }

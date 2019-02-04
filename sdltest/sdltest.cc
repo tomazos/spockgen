@@ -95,6 +95,8 @@ int main(int argc, char** argv) {
         instance.physical_device.getSurfaceCapabilitiesKHR(surface.surface);
 
     vk::Extent2D extent = surface_capabilities.currentExtent;
+    std::cerr << extent.height << std::endl;
+    std::cerr << extent.width << std::endl;
 
     std::vector<vk::SurfaceFormatKHR> surface_formats =
         instance.physical_device.getSurfaceFormatsKHR(surface.surface);
@@ -469,7 +471,7 @@ int main(int argc, char** argv) {
     size_t next_flight = 0;
 
     //  // short circuit:
-    goto done;
+    // goto done;
 
     while (1) {
       SDL_Event event;

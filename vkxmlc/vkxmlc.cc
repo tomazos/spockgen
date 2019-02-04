@@ -504,9 +504,9 @@ inline spk::device_dispatch_table load_device_dispatch_table(
           "nullptr);");
     } else if (sname == "device") {
       h.println(
-          "  device(spk::physical_device& physical_device, "
-          "spk::device_create_info const& create_info, "
-          "spk::allocation_callbacks const * allocation_callbacks = nullptr);");
+          "device(spk::device_ref handle, spk::physical_device& "
+          "physical_device,"
+          "spk::allocation_callbacks const* allocation_callbacks);");
     } else {
       h.print("  ", sname, "(", rname, " handle");
       if (handle->parent) h.print(", ", handle->parent->name, " parent");
@@ -537,6 +537,7 @@ inline spk::device_dispatch_table load_device_dispatch_table(
       if (member_function->command->command->platform)
         h.println(" #ifdef ",
                   member_function->command->command->platform->protect);
+      h.println("  // ", member_function->command->command->name);
       if (member_function->manual_translation) {
         h.print(member_function->manual_translation->interface);
       } else {
@@ -555,7 +556,7 @@ inline spk::device_dispatch_table load_device_dispatch_table(
         } else {
           h.print(member_function->command->sreturn_type->to_string());
         }
-        h.print(" ", member_function->command->name, "(");
+        h.print(" ", member_function->name, "(");
         bool first = true;
         for (size_t i = member_function->begin(); i < member_function->end();
              i++) {
@@ -582,6 +583,7 @@ inline spk::device_dispatch_table load_device_dispatch_table(
         h.println(");");
       }
       if (member_function->command->command->platform) h.println("#endif");
+      h.println();
     }
 
     h.println();
@@ -661,7 +663,7 @@ inline spk::device_dispatch_table load_device_dispatch_table(
         } else {
           h.print(member_function->command->sreturn_type->to_string());
         }
-        h.print(" ", sname, "::", member_function->command->name, "(");
+        h.print(" ", sname, "::", member_function->name, "(");
         bool first = true;
         for (size_t i = member_function->begin(); i < member_function->end();
              i++) {

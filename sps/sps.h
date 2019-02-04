@@ -47,6 +47,7 @@ struct ManualTranslation {
 };
 
 struct MemberFunction {
+  std::string name;
   const Command* command = nullptr;
   const Handle* main_handle = nullptr;
   std::optional<ManualTranslation> manual_translation;

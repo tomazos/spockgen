@@ -23,7 +23,6 @@ cc_binary(
   ],
   deps = [
      "//spk:spock",
-     "//SDL2",
   ],
   linkopts = [
      "-lglog",

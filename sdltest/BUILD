@@ -9,7 +9,6 @@ cc_binary(
     name = "sdltest",
     srcs = glob(["*.cc"]),
     deps = [
-        "//SDL2",
 	":sdltest_hdrs",
 
 	],
@@ -22,6 +21,7 @@ cc_binary(
 		    "-lvulkan",
 		    "-lgflags",
 		    "-lstdc++fs",
+		    "-lSDL2",
 		    ],
 )
 

@@ -3,7 +3,7 @@
 #include <iostream>
 #include <string_view>
 
-#include "SDL2/SDL.h"
+#include <SDL2/SDL.h>
 
 #define SPK_DECL_IMMOVABLE(classname)              \
   classname(const classname&) = delete;            \

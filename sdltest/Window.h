@@ -3,8 +3,8 @@
 #include <string_view>
 #include <vector>
 
-#include "SDL2/SDL.h"
-#include "SDL2/SDL_vulkan.h"
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_vulkan.h>
 
 #include "Utils.h"
 
@@ -15,9 +15,9 @@ class Window {
   SPK_DECL_IMMOVABLE(Window);
 
   Window(const std::string& name)
-      : window(SDL_CreateWindow(
-            name.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0,
-            0, SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_VULKAN)) {
+      : window(SDL_CreateWindow(name.c_str(), SDL_WINDOWPOS_UNDEFINED,
+                                SDL_WINDOWPOS_UNDEFINED, 800, 600,
+                                SDL_WINDOW_VULKAN)) {
     if (!window) sdlerror("SDL_CreateWindow");
   }
 

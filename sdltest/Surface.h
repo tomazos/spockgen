@@ -7,7 +7,7 @@
 #include "Utils.h"
 #include "Window.h"
 
-#include "SDL2/SDL_vulkan.h"
+#include <SDL2/SDL_vulkan.h>
 
 namespace spk {
 
