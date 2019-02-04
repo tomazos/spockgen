@@ -10,7 +10,10 @@ namespace spk {
 
 class loader {
  public:
-  loader();
+  loader(const char* path = nullptr);
+  loader(const loader&) = delete;
+  loader(loader&&) = delete;
+  ~loader();
 
   PFN_vkGetInstanceProcAddr pvkGetInstanceProcAddr;
 
@@ -21,20 +24,19 @@ class loader {
   std::vector<spk::extension_properties> instance_extension_properties(
       const std::string& layer_name) const;
 
-  spk::instance_ref create_instance(
-      spk::instance_create_info const* create_info,
-      spk::allocation_callbacks const* allocator) const;
+  spk::instance create_instance(
+      spk::instance_create_info const& create_info,
+      spk::allocation_callbacks const* allocator = nullptr) const;
+
+  const spk::global_dispatch_table& dispatch_table() const {
+    return global_dispatch_table;
+  }
 
  private:
   std::vector<spk::extension_properties> instance_extension_properties_(
       const char* layer_name) const;
 
   spk::global_dispatch_table global_dispatch_table;
-
-  struct deleter {
-    void operator()(void* handle);
-  };
-  std::unique_ptr<void, deleter> handle;
 };
 
 }  // namespace spk

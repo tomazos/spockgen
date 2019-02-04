@@ -284,7 +284,7 @@ void write_header(const sps::Registry& registry) {
     }
     for (const auto& member : struct_->members)
       if (member.empty_enum())
-        h.println("  VkFlags ", member.name, "; // reserved");
+        h.println("  VkFlags ", member.name, " = {}; // reserved");
       else
         h.println("  ",
                   member.stype->make_declaration(
@@ -390,53 +390,6 @@ void write_header(const sps::Registry& registry) {
       }
       h.println("  }");
 
-      //      const vks::Type* sz;
-      //      const vks::Type* res;
-      //      if (command->resultvec_incomplete(sz, res)) {
-      //        h.println();
-      //        h.println("  std::vector<", res->to_string(), "> ",
-      //        command->name, "("); bool first = true; for (size_t i = 0; i <
-      //        command->params.size() - 2; ++i) {
-      //          const sps::Param& param = command->params.at(i);
-      //          if (param.stype->is_empty_enum()) continue;
-      //          if (first) {
-      //            first = false;
-      //          } else {
-      //            h.println(",");
-      //          }
-      //          h.print("    ", param.stype->make_declaration(param.name, 0));
-      //        }
-      //        h.println();
-      //        h.println("  ) const {");
-      //        h.println("    ", sz->to_string(), " sz_;");
-      //        h.print("    spk::result rz_ = ", command->name, "(");
-      //        for (size_t i = 0; i < command->params.size() - 2; ++i) {
-      //          const sps::Param& param = command->params.at(i);
-      //          if (param.stype->is_empty_enum()) continue;
-      //          h.print(param.name, ",");
-      //        }
-      //        h.println("&sz_,nullptr);");
-      //        h.println("    if (rz_ != spk::result::success)");
-      //        h.println("       throw spk::unexpected_command_result(rz_, \"",
-      //                  command->command->name, "\");");
-      //
-      //        h.println("    std::vector<", res->to_string(), "> rt_(sz_);");
-      //
-      //        h.print("    rz_ = ", command->name, "(");
-      //        for (size_t i = 0; i < command->params.size() - 2; ++i) {
-      //          const sps::Param& param = command->params.at(i);
-      //          if (param.stype->is_empty_enum()) continue;
-      //          h.print(param.name, ",");
-      //        }
-      //        h.println("&sz_,rt_.data());");
-      //        h.println("    if (rz_ != spk::result::success)");
-      //        h.println("       throw spk::unexpected_command_result(rz_, \"",
-      //                  command->command->name, "\");");
-      //        h.println("    return rt_;");
-      //
-      //        h.println("  }");
-      //      }
-
       if (command->command->platform) h.println("#endif");
       h.println();
     }
@@ -534,20 +487,25 @@ inline spk::device_dispatch_table load_device_dispatch_table(
     std::string rname = handle->name;
     std::string vname = handle->handle->name;
 
-    h.println("class ", sname, " {");
+    h.println("class ", sname, " ");
+    if (sname == "instance" || sname == "device") {
+      h.print(": spk::nomove ");
+    }
+    h.println("{");
+
     h.println(" public:");
     h.println("  operator ", rname, "() const { return handle_; }");
 
     if (sname == "instance") {
       h.println(
-          "  instance(loader& loader, instance_create_info const* "
-          "create_info, spk::allocation_callbacks const* allocation_callbacks "
+          "  instance(spk::instance_ref handle, const spk::loader& loader, "
+          "spk::allocation_callbacks const* allocation_callbacks "
           "= "
           "nullptr);");
     } else if (sname == "device") {
       h.println(
           "  device(spk::physical_device& physical_device, "
-          "spk::device_create_info const * create_info, "
+          "spk::device_create_info const& create_info, "
           "spk::allocation_callbacks const * allocation_callbacks = nullptr);");
     } else {
       h.print("  ", sname, "(", rname, " handle");
@@ -563,10 +521,8 @@ inline spk::device_dispatch_table load_device_dispatch_table(
       h.println("  , dispatch_table_(&dispatch_table)");
       h.println("  , allocation_callbacks_(allocation_callbacks) {}");
     }
-    h.println("  ", sname, "(const ", sname, "&) = delete;");
-    if (sname == "instance" || sname == "device") {
-      h.println("  ", sname, "(", sname, "&&) = delete;");
-    } else {
+    if (sname != "instance" || sname != "device") {
+      h.println("  ", sname, "(const ", sname, "&) = delete;");
       h.println("  ", sname, "(", sname, "&& that)");
       h.println("  : handle_(that.handle_)");
       if (handle->parent) h.println("  , parent_(that.parent_)");
@@ -581,175 +537,53 @@ inline spk::device_dispatch_table load_device_dispatch_table(
       if (member_function->command->command->platform)
         h.println(" #ifdef ",
                   member_function->command->command->platform->protect);
-      h.print("  inline ");
-      if (member_function->result) {
-        h.print(member_function->res->to_string());
-      } else if (member_function->resultvec_void ||
-                 member_function->resultvec_incomplete) {
-        h.print("std::vector<", member_function->res->to_string(), ">");
+      if (member_function->manual_translation) {
+        h.print(member_function->manual_translation->interface);
       } else {
-        h.print(member_function->command->sreturn_type->to_string());
-      }
-      h.print(" ", member_function->command->name, "(");
-      bool first = true;
-      for (size_t i = member_function->begin(); i < member_function->end();
-           i++) {
-        const sps::Param& param = member_function->command->params.at(i);
-        if (param.stype->is_empty_enum()) continue;
-        if (first)
-          first = false;
-        else
-          h.print(", ");
-        if (member_function->szptrs.count(i)) {
-          const sps::Param& param = member_function->command->params.at(i + 1);
-          h.print("spk::array_view<",
-                  sps::get_pointee(param.stype)->to_string(), "> ", param.name);
-          i++;
-        } else if (auto ref = param.asref()) {
-          h.print(ref->make_declaration("&" + param.name, 0));
+        h.print("  inline ");
+        std::string rtype;
+        if (member_function->result_handle)
+          rtype = "spk::" + member_function->result_handle->fullname;
+        else if (member_function->res)
+          rtype = member_function->res->to_string();
+
+        if (member_function->result) {
+          h.print(rtype);
+        } else if (member_function->resultvec_void ||
+                   member_function->resultvec_incomplete) {
+          h.print("std::vector<", rtype, ">");
         } else {
-          h.print(param.stype->make_declaration(param.name, 0));
+          h.print(member_function->command->sreturn_type->to_string());
         }
+        h.print(" ", member_function->command->name, "(");
+        bool first = true;
+        for (size_t i = member_function->begin(); i < member_function->end();
+             i++) {
+          const sps::Param& param = member_function->command->params.at(i);
+          if (param.stype->is_empty_enum() || param.is_allocation_callbacks())
+            continue;
+          if (first)
+            first = false;
+          else
+            h.print(", ");
+          if (member_function->szptrs.count(i)) {
+            const sps::Param& param =
+                member_function->command->params.at(i + 1);
+            h.print("spk::array_view<",
+                    sps::get_pointee(param.stype)->to_string(), "> ",
+                    param.name);
+            i++;
+          } else if (auto ref = param.asref()) {
+            h.print(ref->make_declaration("&" + param.name, 0));
+          } else {
+            h.print(param.stype->make_declaration(param.name, 0));
+          }
+        }
+        h.println(");");
       }
-      h.println(");");
       if (member_function->command->command->platform) h.println("#endif");
     }
 
-    //    for (int pass : {1, 2, 3})
-    //      for (const auto& member_function : handle->member_functions) {
-    //        sps::MemberFunctionKind kind = member_function.kind;
-    //        if (pass == 1 && kind != sps::MemberFunctionKind::CONSTRUCTOR)
-    //        continue; if (pass == 2 && kind !=
-    //        sps::MemberFunctionKind::SINGLE_HANDLE &&
-    //            kind != sps::MemberFunctionKind::DOUBLE_HANDLE)
-    //          continue;
-    //        if (pass == 3 && kind !=
-    //        sps::MemberFunctionKind::SINGLE_DESTRUCTOR &&
-    //            kind != sps::MemberFunctionKind::DOUBLE_DESTRUCTOR)
-    //          continue;
-    //
-    //        const sps::Command* command = member_function.command;
-    //
-    //        if (command->command->platform)
-    //          h.println("#ifdef ", command->command->platform->protect);
-    //
-    //        const vks::Type* sz;
-    //        const vks::Type* res;
-    //        if (command->resultvec_incomplete(sz, res)) {
-    //          bool dhc = (kind == sps::MemberFunctionKind::DOUBLE_HANDLE ||
-    //                      kind == sps::MemberFunctionKind::DOUBLE_DESTRUCTOR);
-    //
-    //          h.println();
-    //          h.println("  std::vector<", res->to_string(), "> ",
-    //          command->name,
-    //                    "(");
-    //          bool first = true;
-    //          for (size_t i = (dhc ? 2 : 1); i < command->params.size() - 2;
-    //          ++i) {
-    //            const sps::Param& param = command->params.at(i);
-    //            if (param.stype->is_empty_enum()) continue;
-    //            if (first) {
-    //              first = false;
-    //            } else {
-    //              h.println(",");
-    //            }
-    //            h.print("    ", param.stype->make_declaration(param.name, 0));
-    //          }
-    //          h.println();
-    //          h.println("  ) { // ", kind);
-    //          h.print("    return dispatch_table().", command->name, "(");
-    //          first = true;
-    //          for (size_t i = 0; i < command->params.size() - 2; ++i) {
-    //            const sps::Param& param = command->params.at(i);
-    //            if (param.stype->is_empty_enum()) continue;
-    //            std::string pname;
-    //            if (i == 0 && !dhc)
-    //              pname = "handle_";
-    //            else if (i == 0 && dhc)
-    //              pname = "parent_" + dynamic_cast<const sps::Name*>(
-    //                                      command->params.at(0).stype)
-    //                                      ->entity->name;
-    //            else if (i == 1 && dhc)
-    //              pname = "handle_";
-    //            else
-    //              pname = param.name;
-    //            if (first) {
-    //              first = false;
-    //            } else {
-    //              h.print(",");
-    //            }
-    //
-    //            h.print(pname);
-    //          }
-    //          h.println(");");
-    //          h.println("  }");
-    //          h.println();
-    //        } else if (kind == sps::MemberFunctionKind::CONSTRUCTOR) {
-    //          h.println("  // TODO CONSTRUCTOR: ", command->name);
-    //        } else {
-    //          bool dhc = (kind == sps::MemberFunctionKind::DOUBLE_HANDLE ||
-    //                      kind == sps::MemberFunctionKind::DOUBLE_DESTRUCTOR);
-    //          bool isresult = (command->vreturn_type->to_string() ==
-    //          "VkResult"); bool ismultisuccess =
-    //              (isresult && command->command->successcodes.size() > 1);
-    //          bool isonesuccess = (isresult && !ismultisuccess);
-    //          bool isvoid = command->vreturn_type->to_string() == "void";
-    //          // bool isother = (!isvoid && !isresult);
-    //          if (ismultisuccess) {
-    //            h.println("  [[nodiscard]] spk::result ", command->name, "(");
-    //          } else if (isonesuccess) {
-    //            h.println("  void ", command->name, "(");
-    //          } else {
-    //            h.println("  ", command->sreturn_type->to_string(), " ",
-    //                      command->name, "(");
-    //          }
-    //          bool first = true;
-    //          for (size_t i = (dhc ? 2 : 1); i < command->params.size(); ++i)
-    //          {
-    //            const sps::Param& param = command->params.at(i);
-    //            if (param.stype->is_empty_enum()) continue;
-    //            if (first) {
-    //              first = false;
-    //            } else {
-    //              h.println(",");
-    //            }
-    //            h.print("    ", param.stype->make_declaration(param.name, 0));
-    //          }
-    //          h.println();
-    //          h.println("  ) { // ", kind);
-    //          if (!isvoid && !isonesuccess)
-    //            h.print("    return dispatch_table().", command->name, "(");
-    //          else
-    //            h.print("    dispatch_table().", command->name, "(");
-    //          first = true;
-    //          for (size_t i = 0; i < command->params.size(); ++i) {
-    //            const sps::Param& param = command->params.at(i);
-    //            if (param.stype->is_empty_enum()) continue;
-    //            std::string pname;
-    //            if (i == 0 && !dhc)
-    //              pname = "handle_";
-    //            else if (i == 0 && dhc)
-    //              pname = "parent_" + dynamic_cast<const sps::Name*>(
-    //                                      command->params.at(0).stype)
-    //                                      ->entity->name;
-    //            else if (i == 1 && dhc)
-    //              pname = "handle_";
-    //            else
-    //              pname = param.name;
-    //            if (first) {
-    //              first = false;
-    //            } else {
-    //              h.print(",");
-    //            }
-    //            h.print(pname);
-    //          }
-    //          h.println(");");
-    //          h.println("  }");
-    //        }
-    //
-    //        if (command->command->platform) h.println("#endif");
-    //        h.println();
-    //      }
     h.println();
     if (sname == "instance")
       h.println(
@@ -809,96 +643,146 @@ inline spk::device_dispatch_table load_device_dispatch_table(
       if (member_function->command->command->platform)
         h.println("#ifdef ",
                   member_function->command->command->platform->protect);
-      h.print("inline ");
-      if (member_function->result) {
-        h.print(member_function->res->to_string());
-      } else if (member_function->resultvec_void ||
-                 member_function->resultvec_incomplete) {
-        h.print("std::vector<", member_function->res->to_string(), ">");
+      if (member_function->manual_translation) {
+        h.print(member_function->manual_translation->implementation);
       } else {
-        h.print(member_function->command->sreturn_type->to_string());
-      }
-      h.print(" ", sname, "::", member_function->command->name, "(");
-      bool first = true;
-      for (size_t i = member_function->begin(); i < member_function->end();
-           i++) {
-        const sps::Param& param = member_function->command->params.at(i);
-        if (param.stype->is_empty_enum()) continue;
-        if (first)
-          first = false;
-        else
-          h.print(", ");
-        if (member_function->szptrs.count(i)) {
-          const sps::Param& param = member_function->command->params.at(i + 1);
-          h.print("spk::array_view<",
-                  sps::get_pointee(param.stype)->to_string(), "> ", param.name);
-          i++;
-        } else if (auto ref = param.asref()) {
-          h.print(ref->make_declaration("&" + param.name, 0));
+        h.print("inline ");
+        std::string rtype;
+        if (member_function->result_handle)
+          rtype = "spk::" + member_function->result_handle->fullname;
+        else if (member_function->res)
+          rtype = member_function->res->to_string();
+
+        if (member_function->result) {
+          h.print(rtype);
+        } else if (member_function->resultvec_void ||
+                   member_function->resultvec_incomplete) {
+          h.print("std::vector<", rtype, ">");
         } else {
-          h.print(param.stype->make_declaration(param.name, 0));
+          h.print(member_function->command->sreturn_type->to_string());
         }
-      }
-      h.println(") {");
-      auto write_call = [&] {
-        h.print("  dispatch_table().", member_function->command->name, "(");
-        if (member_function->parent_dispatch)
-          h.print("parent_, handle_");
-        else
-          h.print("handle_");
+        h.print(" ", sname, "::", member_function->command->name, "(");
+        bool first = true;
         for (size_t i = member_function->begin(); i < member_function->end();
              i++) {
           const sps::Param& param = member_function->command->params.at(i);
-          if (param.stype->is_empty_enum()) continue;
-          h.print(", ");
+          if (param.stype->is_empty_enum() || param.is_allocation_callbacks())
+            continue;
+          if (first)
+            first = false;
+          else
+            h.print(", ");
           if (member_function->szptrs.count(i)) {
-            h.print(member_function->command->params.at(i + 1).name, ".size()");
-          } else if (member_function->szptrs.count(i - 1)) {
-            h.print(param.name, ".data()");
-          } else if (param.asref()) {
-            h.print("&", param.name);
+            const sps::Param& param =
+                member_function->command->params.at(i + 1);
+            h.print("spk::array_view<",
+                    sps::get_pointee(param.stype)->to_string(), "> ",
+                    param.name);
+            i++;
+          } else if (auto ref = param.asref()) {
+            h.print(ref->make_declaration("&" + param.name, 0));
           } else {
-            h.print(param.name);
+            h.print(param.stype->make_declaration(param.name, 0));
           }
         }
-      };
-      if (member_function->result) {
-        h.println("  ", member_function->res->to_string(), " result_;");
-        write_call();
-        h.println(", &result_);");
-        h.println("  return result_;");
-      } else if (member_function->resultvec_void ||
-                 member_function->resultvec_incomplete) {
-        h.println("  ", member_function->sz->to_string(), " size_;");
-        for (int pass : {1, 2}) {
-          if (member_function->resultvec_incomplete) {
-            h.print("  spk::result success", pass, "_ = ");
+        h.println(") {");
+        auto write_call = [&] {
+          h.print("  dispatch_table().", member_function->command->name, "(");
+          if (member_function->parent_dispatch)
+            h.print("parent_, handle_");
+          else
+            h.print("handle_");
+          for (size_t i = member_function->begin(); i < member_function->end();
+               i++) {
+            const sps::Param& param = member_function->command->params.at(i);
+            if (param.stype->is_empty_enum()) continue;
+            h.print(", ");
+            if (param.is_allocation_callbacks())
+              h.print("allocation_callbacks_");
+            else if (member_function->szptrs.count(i)) {
+              h.print(member_function->command->params.at(i + 1).name,
+                      ".size()");
+            } else if (member_function->szptrs.count(i - 1)) {
+              h.print(param.name, ".data()");
+            } else if (param.asref()) {
+              h.print("&", param.name);
+            } else {
+              h.print(param.name);
+            }
           }
+        };
+        if (member_function->result) {
+          h.println("  ", member_function->res->to_string(), " result_;");
           write_call();
-          if (pass == 1)
-            h.println(", &size_, nullptr);");
-          else if (pass == 2)
-            h.println(", &size_, result_.data());");
-          if (member_function->resultvec_incomplete) {
-            h.println("  if (success", pass,
-                      "_ != spk::result::success) throw "
-                      "spk::unexpected_command_result(success",
-                      pass, "_, \"", member_function->command->command->name,
-                      "\");");
-          }
-          if (pass == 1)
-            h.println("  std::vector<", member_function->res->to_string(),
-                      "> result_(size_);");
-          else if (pass == 2)
+          h.println(", &result_);");
+
+          if (!member_function->result_handle) {
             h.println("  return result_;");
+          } else {
+            const sps::Handle* reshand = member_function->result_handle;
+            h.print("  return {result_");
+            if (reshand->parent) {
+              if (reshand->parent != handle) {
+                LOG(ERROR) << "mismatch parent: "
+                           << member_function->command->name << " member of "
+                           << handle->name << " but parent "
+                           << reshand->parent->name;
+              }
+              h.print(", handle_");
+            }
+            h.println(", dispatch_table(), allocation_callbacks_};");
+          }
+        } else if (member_function->resultvec_void ||
+                   member_function->resultvec_incomplete) {
+          h.println("  ", member_function->sz->to_string(), " size_;");
+          for (int pass : {1, 2}) {
+            if (member_function->resultvec_incomplete) {
+              h.print("  spk::result success", pass, "_ = ");
+            }
+            write_call();
+            if (pass == 1)
+              h.println(", &size_, nullptr);");
+            else if (pass == 2)
+              h.println(", &size_, result_.data());");
+            if (member_function->resultvec_incomplete) {
+              h.println("  if (success", pass,
+                        "_ != spk::result::success) throw "
+                        "spk::unexpected_command_result(success",
+                        pass, "_, \"", member_function->command->command->name,
+                        "\");");
+            }
+            if (pass == 1)
+              h.println("  std::vector<", member_function->res->to_string(),
+                        "> result_(size_);");
+          }
+          if (!member_function->result_handle) {
+            h.println("  return result_;");
+          } else {
+            const sps::Handle* reshand = member_function->result_handle;
+            h.println("  std::vector<", rtype, "> result2_;");
+            h.println("  result2_.reserve(size_);");
+            h.println("  for (auto ref : result_)");
+            h.println("    result2_.emplace_back(ref");
+            if (reshand->parent) {
+              if (reshand->parent != handle) {
+                LOG(ERROR) << "mismatch parent: "
+                           << member_function->command->name << " member of "
+                           << handle->name << " but parent "
+                           << reshand->parent->name;
+              }
+              h.print(", handle_");
+            }
+            h.println(", dispatch_table(), allocation_callbacks_);");
+            h.println("  return result2_;");
+          }
+        } else {
+          if (member_function->command->sreturn_type->to_string() != "void")
+            h.print("  return ");
+          write_call();
+          h.println(");");
         }
-      } else {
-        if (member_function->command->sreturn_type->to_string() != "void")
-          h.print("  return ");
-        write_call();
-        h.println(");");
+        h.println("}");
       }
-      h.println("}");
       if (member_function->command->command->platform) h.println("#endif");
       h.println();
     }

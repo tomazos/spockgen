@@ -4,25 +4,30 @@
 #include <glog/logging.h>
 #include <memory>
 
+#include "SDL2/SDL_vulkan.h"
+
 namespace spk {
 
-instance::instance(spk::loader& loader,
-                   spk::instance_create_info const* create_info,
-                   spk::allocation_callbacks const* allocation_callbacks)
-    : handle_(loader.create_instance(create_info, allocation_callbacks)),
-      dispatch_table_(
-          load_instance_dispatch_table(loader.pvkGetInstanceProcAddr, handle_)),
-      allocation_callbacks_(allocation_callbacks) {}
+namespace {
 
 spk::device_ref create_device(
     spk::physical_device& physical_device,
-    spk::device_create_info const* create_info,
+    spk::device_create_info const& create_info,
     spk::allocation_callbacks const* allocation_callbacks) {
   spk::device_ref device;
-  physical_device.dispatch_table().create_device(physical_device, create_info,
+  physical_device.dispatch_table().create_device(physical_device, &create_info,
                                                  allocation_callbacks, &device);
   return device;
 }
+
+}  // namespace
+
+instance::instance(spk::instance_ref instance, const spk::loader& loader,
+                   spk::allocation_callbacks const* allocation_callbacks)
+    : handle_(instance),
+      dispatch_table_(
+          load_instance_dispatch_table(loader.pvkGetInstanceProcAddr, handle_)),
+      allocation_callbacks_(allocation_callbacks) {}
 
 device_dispatch_table load_device_dispatch_table(
     spk::physical_device& physical_device, spk::device_ref device) {
@@ -34,31 +39,25 @@ device_dispatch_table load_device_dispatch_table(
 }
 
 device::device(spk::physical_device& physical_device,
-               spk::device_create_info const* create_info,
+               spk::device_create_info const& create_info,
                spk::allocation_callbacks const* allocation_callbacks)
     : handle_(
           create_device(physical_device, create_info, allocation_callbacks)),
       dispatch_table_(load_device_dispatch_table(physical_device, handle_)),
       allocation_callbacks_(allocation_callbacks) {}
 
-loader::loader() : handle(::dlopen("libvulkan.so", RTLD_NOW | RTLD_GLOBAL)) {
-  CHECK(handle != nullptr) << "Unable to dlopen libvulkan.so because "
-                           << ::dlerror();
-  ::dlerror();  // clear
+loader::loader(const char* path) {
+  if (SDL_Vulkan_LoadLibrary(path) != 0) LOG(FATAL) << SDL_GetError();
+
   pvkGetInstanceProcAddr =
-      (PFN_vkGetInstanceProcAddr)dlsym(handle.get(), "vkGetInstanceProcAddr");
-  char* error = ::dlerror();
-  CHECK(error == NULL)
-      << "Unable to dlsym vkGetInstanceProcAddr from libulkan.so because "
-      << error;
+      (PFN_vkGetInstanceProcAddr)SDL_Vulkan_GetVkGetInstanceProcAddr();
+
+  CHECK(pvkGetInstanceProcAddr);
 
   global_dispatch_table = load_global_dispatch_table(pvkGetInstanceProcAddr);
 }
 
-void loader::deleter::operator()(void* handle) {
-  CHECK(::dlclose(handle) == 0)
-      << "Unable to dlclose libvulkan.so because " << ::dlerror();
-}
+loader::~loader() { SDL_Vulkan_UnloadLibrary(); }
 
 spk::version loader::instance_version() const {
   uint32_t v;
@@ -101,12 +100,14 @@ std::vector<spk::extension_properties> loader::instance_extension_properties_(
   return v;
 }
 
-spk::instance_ref loader::create_instance(
-    spk::instance_create_info const* pCreateInfo,
-    spk::allocation_callbacks const* pAllocator) const {
+spk::instance loader::create_instance(
+    spk::instance_create_info const& create_info,
+    spk::allocation_callbacks const* allocation_callbacks) const {
   spk::instance_ref instance_ref;
-  global_dispatch_table.create_instance(pCreateInfo, pAllocator, &instance_ref);
-  return instance_ref;
+  global_dispatch_table.create_instance(&create_info, allocation_callbacks,
+                                        &instance_ref);
+
+  return {instance_ref, *this, allocation_callbacks};
 }
 
 }  // namespace spk

@@ -6,6 +6,14 @@ cc_library(
         srcs = [
                         "libSDL2.a",
         ],
+        linkopts = [
+          "-lm",
+          "-ldl",
+          "-lsndio",
+          "-lpthread",
+          "-lrt"
+          ],
+        
 )
 
 

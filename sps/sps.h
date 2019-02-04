@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glog/logging.h>
+#include <optional>
 
 #include "vks/vks.h"
 
@@ -38,13 +39,22 @@ struct Command;  // fwd decl
 
 struct Handle;
 
+struct ManualTranslation {
+  std::string handle;
+  std::string command;
+  std::string interface;
+  std::string implementation;
+};
+
 struct MemberFunction {
   const Command* command = nullptr;
   const Handle* main_handle = nullptr;
+  std::optional<ManualTranslation> manual_translation;
   bool parent_dispatch = false;
   bool result = false;
   bool resultvec_incomplete = false;
   bool resultvec_void = false;
+  const Handle* result_handle = nullptr;
   const vks::Type* sz = nullptr;
   const vks::Type* res = nullptr;
   std::set<size_t> szptrs;
@@ -149,6 +159,12 @@ struct Param {
     if (!param->get_optional(0)) return ptr->T;
     return nullptr;
   }
+  bool is_allocation_callbacks() const {
+    bool result = (name == "pAllocator");
+    if (result)
+      CHECK_EQ(stype->to_string(), "spk::allocation_callbacks const *");
+    return result;
+  }
 };
 
 struct Command : Entity {
@@ -222,6 +238,7 @@ struct Registry {
   std::vector<Handle*> handles;
   std::vector<Struct*> structs;
   std::vector<Command*> commands;
+  static std::vector<ManualTranslation> manual_translations;
 
   std::unordered_map<const vks::Bitmask*, sps::Bitmask*> bitmask_map;
   std::unordered_map<const vks::Enumeration*, sps::Enumeration*>

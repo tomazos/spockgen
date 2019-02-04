@@ -2,6 +2,8 @@
 #include <glog/logging.h>
 #include <functional>
 
+#include "SDL2/SDL.h"
+#include "SDL2/SDL_vulkan.h"
 #include "spk/loader.h"
 #include "spk/spock.h"
 
@@ -29,11 +31,38 @@ debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
   return VK_FALSE;
 }
 
+std::vector<std::string> get_sdl_extensions(SDL_Window* window) {
+  unsigned int count;
+
+  if (!SDL_Vulkan_GetInstanceExtensions(window, &count, nullptr))
+    LOG(FATAL) << SDL_GetError();
+
+  std::vector<const char*> extensions_cstr(count);
+
+  if (!SDL_Vulkan_GetInstanceExtensions(window, &count, extensions_cstr.data()))
+    LOG(FATAL) << SDL_GetError();
+
+  std::vector<std::string> extensions(count);
+  for (unsigned int i = 0; i < count; i++) extensions[i] = extensions_cstr[i];
+  return extensions;
+}
+
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
+  if (SDL_Init(SDL_INIT_VIDEO) != 0) LOG(FATAL) << SDL_GetError();
+
   spk::loader loader;
+
+  SDL_Window* window = SDL_CreateWindow(
+      "loadertest", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0,
+      SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_VULKAN);
+  if (!window) LOG(FATAL) << SDL_GetError();
+
+  const std::vector<std::string> extensions = get_sdl_extensions(window);
+
+  for (auto s : extensions) LOG(ERROR) << "SDL EXTENSION: " << s;
 
   CHECK_EQ(loader.instance_version(), spk::version(1, 1, 0));
 
@@ -75,32 +104,44 @@ int main(int argc, char** argv) {
   spk::instance_create_info instance_create_info;
   const char* layers[] = {"VK_LAYER_LUNARG_standard_validation"};
   instance_create_info.set_pp_enabled_layer_names({layers, 1});
-  const char* extensions[] = {spk::ext_debug_utils_extension_name};
-  instance_create_info.set_pp_enabled_extension_names({extensions, 1});
+  std::vector<const char*> cextensions = {spk::ext_debug_utils_extension_name};
+  for (const std::string& extension : extensions)
+    cextensions.push_back(extension.c_str());
+  instance_create_info.set_pp_enabled_extension_names(
+      {cextensions.data(), cextensions.size()});
 
-  instance_create_info.set_next(&debug_utils_messenger_create_info);
+  //  instance_create_info.set_next(&debug_utils_messenger_create_info);
 
-  spk::instance instance(loader, &instance_create_info, nullptr);
+  spk::instance instance = loader.create_instance(instance_create_info);
 
-  spk::debug_utils_messenger_ext_ref debug_utils_messenger_ext_ref =
+  spk::debug_utils_messenger_ext debug_utils_messenger_ext =
       instance.create_debug_utils_messenger_ext(
-          debug_utils_messenger_create_info, nullptr);
+          debug_utils_messenger_create_info);
 
-  spk::debug_utils_messenger_ext debug_utils_messenger_ext(
-      debug_utils_messenger_ext_ref, instance, instance.dispatch_table(),
-      nullptr);
+  spk::surface_khr_ref surface_ref;
+  if (!SDL_Vulkan_CreateSurface(window, instance, &surface_ref))
+    LOG(FATAL) << SDL_GetError();
+  spk::surface_khr surface(surface_ref, instance, instance.dispatch_table(),
+                           nullptr);
 
-  for (spk::physical_device_ref physical_device_ref :
-       instance.enumerate_physical_devices()) {
-    spk::physical_device physical_device(physical_device_ref,
-                                         instance.dispatch_table(), nullptr);
+  std::vector<spk::physical_device> physical_devices =
+      instance.enumerate_physical_devices();
+  spk::physical_device& physical_device = physical_devices.at(0);
+  std::vector<spk::queue_family_properties> queue_family_properties_vector =
+      physical_device.get_physical_device_queue_family_properties();
 
-    LOG(ERROR) << "PHYSICAL DEVICE: "
-               << physical_device.get_physical_device_properties()
-                      .device_name()
-                      .data();
-
-    spk::device_create_info device_create_info;
-    spk::device device(physical_device, &device_create_info, nullptr);
+  for (const auto& queue_family_properties : queue_family_properties_vector) {
+    LOG(ERROR) << "queue_family_properties.queue_flags() = "
+               << queue_family_properties.queue_flags();
   }
+
+  spk::device_create_info device_create_info;
+  spk::device_queue_create_info device_queue_create_info;
+  float x = 0.5;
+  device_queue_create_info.set_queue_priorities({&x, 1});
+  device_queue_create_info.set_queue_family_index(0);
+
+  device_create_info.set_queue_create_infos({&device_queue_create_info, 1});
+
+  spk::device device(physical_device, device_create_info, nullptr);
 }

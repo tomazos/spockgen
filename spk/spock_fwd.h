@@ -139,6 +139,21 @@ class array_view<const void> : public std::string_view {
   using std::string_view::string_view;
 };
 
+template <>
+class array_view<void> {
+ public:
+ public:
+  array_view() : ptr_(nullptr), size_(0) {}
+  array_view(void* ptr, size_t size) : ptr_(ptr), size_(size) {}
+
+  void* data() const { return ptr_; }
+  size_t size() const { return size_; }
+
+ private:
+  void* ptr_;
+  size_t size_;
+};
+
 #define SPK_DEFINE_BITMASK_BITWISE_OPS(bitmask)                        \
   inline bitmask operator~(bitmask a) { return bitmask(~VkFlags(a)); } \
   inline bitmask operator|(bitmask a, bitmask b) {                     \
@@ -211,5 +226,13 @@ struct strip_member_function<F C::*> {
 
 template <typename T>
 using strip_member_function_t = typename strip_member_function<T>::type;
+
+struct nomove {
+  nomove() = default;
+  nomove(const nomove&) = delete;
+  nomove(nomove&&) = delete;
+  nomove& operator=(const nomove&) = delete;
+  nomove& operator=(nomove&&) = delete;
+};
 
 }  // namespace spk

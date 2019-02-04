@@ -1,14 +1,14 @@
 genrule(
   name = "vkxmltest_generate",
   srcs = [
-	"//data:vk82.xml",
+	"//data:vk97.xml",
   ],
   outs = [
      "vkxml.json",
      "vkxmltest.cc",
   ],
   cmd = "$(location //vkxmlc) " +
-        "--vkxml $(location //data:vk82.xml) " +
+        "--vkxml $(location //data:vk97.xml) " +
         "--outtest $(location vkxmltest.cc) " +
         "--outjson $(location vkxml.json)",
   tools = [

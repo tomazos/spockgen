@@ -104,11 +104,13 @@ std::string translate_command_name(const std::string& name) {
 }
 
 std::string translate_member_name(const std::string& name) {
-  return to_underscore_style(split_identifier_view(name));
+  std::string mname = to_underscore_style(split_identifier_view(name));
+  if (mname == "major" || mname == "minor") mname = mname + "_";
+  return mname;
 }
 
 std::string common_prefix(const std::vector<std::string>& names) {
-  CHECK_GT(names.size(), 1);
+  if (names.size() < 2) return "";
   for (size_t i = 0; i <= names[0].size(); i++) {
     char c = names[0][i];
     for (size_t j = 1; j < names.size(); j++)
@@ -405,22 +407,180 @@ std::set<std::string> manual_translation_commands = {
     "destroy_descriptor_update_template_khr",
     "destroy_sampler_ycbcr_conversion_khr",
     "create_device",
-    "get_physical_device_generated_commands_properties_nvx",
-    "create_graphics_pipelines",
-    "allocate_command_buffers",
-    "allocate_descriptor_sets",
-    "create_compute_pipelines",
-    "create_shared_swapchains_khr",
     "debug_report_message_ext",
-    "enumerate_device_extension_properties",
-    "set_hdr_metadata_ext",
-    "unregister_objects_nvx",
-    "register_objects_nvx",
-    "cmd_bind_vertex_buffers",
-    "get_pipeline_cache_data",
-    "get_shader_info_amd",
-    "get_query_pool_results",
-    "get_validation_cache_data_ext"};
+    //"create_display_mode_khr",
+};
+
+}  // namespace
+namespace sps {
+std::vector<sps::ManualTranslation> Registry::manual_translations = {
+
+    {"physical_device", "get_physical_device_generated_commands_properties_nvx",
+     R"(
+inline std::pair<spk::device_generated_commands_features_nvx,spk::device_generated_commands_limits_nvx>
+get_physical_device_generated_commands_properties_nvx();
+)",
+     R"(
+inline std::pair<spk::device_generated_commands_features_nvx,spk::device_generated_commands_limits_nvx>
+physical_device::get_physical_device_generated_commands_properties_nvx() {
+  std::pair<spk::device_generated_commands_features_nvx,spk::device_generated_commands_limits_nvx> result_;
+  dispatch_table().get_physical_device_generated_commands_properties_nvx(handle_, &result_.first, &result_.second);
+  return result_;
+};)"},
+    {"device", "create_graphics_pipelines",
+     R"(
+inline std::vector<spk::pipeline>
+create_graphics_pipelines(spk::pipeline_cache_ref pipeline_cache,
+                          spk::array_view<const spk::graphics_pipeline_create_info> create_infos);
+)",
+     R"(
+inline std::vector<spk::pipeline>
+device::create_graphics_pipelines(spk::pipeline_cache_ref pipeline_cache,
+                          spk::array_view<const spk::graphics_pipeline_create_info> create_infos) {
+  std::vector<spk::pipeline_ref> pipeline_refs(create_infos.size());
+  dispatch_table().create_graphics_pipelines(handle_,pipeline_cache, create_infos.size(), create_infos.data(), allocation_callbacks_, pipeline_refs.data());
+  std::vector<spk::pipeline> pipelines;
+  pipelines.reserve(create_infos.size());
+  for (auto pipeline_ref : pipeline_refs)
+    pipelines.emplace_back(pipeline_ref,*this,dispatch_table(),allocation_callbacks_);
+  return pipelines;
+}
+)"},
+    {
+        "device",
+        "allocate_command_buffers",
+        R"(
+inline std::vector<spk::command_buffer>
+allocate_command_buffers(spk::command_buffer_allocate_info& allocate_info);
+)",
+        R"(
+inline std::vector<spk::command_buffer>
+device::allocate_command_buffers(spk::command_buffer_allocate_info& allocate_info) {
+  std::vector<spk::command_buffer_ref> command_buffer_refs(allocate_info.command_buffer_count());
+  dispatch_table().allocate_command_buffers(handle_, &allocate_info, command_buffer_refs.data());
+  std::vector<spk::command_buffer> command_buffers;
+  command_buffers.reserve(allocate_info.command_buffer_count());
+  for (auto command_buffer_ref : command_buffer_refs)
+    command_buffers.emplace_back(command_buffer_ref,*this,dispatch_table(),allocation_callbacks_);
+  return command_buffers;
+}
+)",
+    },
+    {
+        "device",
+        "allocate_descriptor_sets",
+        R"(
+inline std::vector<spk::descriptor_set>
+allocate_descriptor_sets(spk::descriptor_set_allocate_info& allocate_info);
+)",
+        R"(
+inline std::vector<spk::descriptor_set>
+device::allocate_descriptor_sets(spk::descriptor_set_allocate_info& allocate_info) {
+  std::vector<spk::descriptor_set_ref> descriptor_set_refs(allocate_info.set_layouts().size());
+  dispatch_table().allocate_descriptor_sets(handle_, &allocate_info, descriptor_set_refs.data());
+  std::vector<spk::descriptor_set> descriptor_sets;
+  descriptor_sets.reserve(allocate_info.set_layouts().size());
+  for (auto descriptor_set_ref : descriptor_set_refs)
+    descriptor_sets.emplace_back(descriptor_set_ref,*this,dispatch_table(),allocation_callbacks_);
+  return descriptor_sets;
+}
+)",
+    },
+    {"device", "create_compute_pipelines",
+     R"(
+    inline std::vector<spk::pipeline>
+    create_compute_pipelines(spk::pipeline_cache_ref pipeline_cache,
+                              spk::array_view<const spk::compute_pipeline_create_info> create_infos);
+    )",
+     R"(
+inline std::vector<spk::pipeline>
+device::create_compute_pipelines(spk::pipeline_cache_ref pipeline_cache,
+                         spk::array_view<const spk::compute_pipeline_create_info> create_infos) {
+ std::vector<spk::pipeline_ref> pipeline_refs(create_infos.size());
+ dispatch_table().create_compute_pipelines(handle_,pipeline_cache, create_infos.size(), create_infos.data(), allocation_callbacks_, pipeline_refs.data());
+ std::vector<spk::pipeline> pipelines;
+ pipelines.reserve(create_infos.size());
+ for (auto pipeline_ref : pipeline_refs)
+   pipelines.emplace_back(pipeline_ref,*this,dispatch_table(),allocation_callbacks_);
+ return pipelines;
+}
+)"},
+    {"device", "create_shared_swapchains_khr",
+     R"(
+inline std::vector<spk::swapchain_khr>
+create_shared_swapchains_khr(spk::array_view<const spk::swapchain_create_info_khr> create_infos);
+)",
+     R"(
+inline std::vector<spk::swapchain_khr>
+device::create_shared_swapchains_khr(spk::array_view<const spk::swapchain_create_info_khr> create_infos) {
+std::vector<spk::swapchain_khr_ref> swapchain_refs(create_infos.size());
+dispatch_table().create_shared_swapchains_khr(handle_, create_infos.size(), create_infos.data(), allocation_callbacks_, swapchain_refs.data());
+std::vector<spk::swapchain_khr> swapchains;
+swapchains.reserve(create_infos.size());
+for (auto swapchain_ref : swapchain_refs)
+swapchains.emplace_back(swapchain_ref,*this,dispatch_table(),allocation_callbacks_);
+return swapchains;
+}
+)"},
+    {"device", "create_ray_tracing_pipelines_nv",
+     R"(
+inline std::vector<spk::pipeline>
+create_ray_tracing_pipelines_nv(spk::pipeline_cache_ref pipeline_cache,
+                          spk::array_view<const spk::ray_tracing_pipeline_create_info_nv> create_infos);
+)",
+     R"(
+inline std::vector<spk::pipeline>
+device::create_ray_tracing_pipelines_nv(spk::pipeline_cache_ref pipeline_cache,
+                     spk::array_view<const spk::ray_tracing_pipeline_create_info_nv> create_infos) {
+std::vector<spk::pipeline_ref> pipeline_refs(create_infos.size());
+dispatch_table().create_ray_tracing_pipelines_nv(handle_,pipeline_cache, create_infos.size(), create_infos.data(), allocation_callbacks_, pipeline_refs.data());
+std::vector<spk::pipeline> pipelines;
+pipelines.reserve(create_infos.size());
+for (auto pipeline_ref : pipeline_refs)
+pipelines.emplace_back(pipeline_ref,*this,dispatch_table(),allocation_callbacks_);
+return pipelines;
+}
+)"},
+    {"swapchain_khr", "get_swapchain_images_khr",
+     R"(
+inline std::vector<spk::image> get_swapchain_images_khr();
+)",
+     R"(
+inline std::vector<spk::image> swapchain_khr::get_swapchain_images_khr() {
+  uint32_t size_;
+  spk::result success1_ = dispatch_table().get_swapchain_images_khr(
+      parent_, handle_, &size_, nullptr);
+  if (success1_ != spk::result::success)
+    throw spk::unexpected_command_result(success1_, "vkGetSwapchainImagesKHR");
+  std::vector<spk::image_ref> result_(size_);
+  spk::result success2_ = dispatch_table().get_swapchain_images_khr(
+      parent_, handle_, &size_, result_.data());
+  if (success2_ != spk::result::success)
+    throw spk::unexpected_command_result(success2_, "vkGetSwapchainImagesKHR");
+  std::vector<spk::image> result2_;
+  result2_.reserve(size_);
+  for (auto ref : result_)
+    result2_.emplace_back(ref, parent_, dispatch_table(),
+                          allocation_callbacks_);
+  return result2_;
+}
+)"},
+    {"display_khr", "create_display_mode_khr",
+     R"(inline spk::display_mode_khr create_display_mode_khr(
+    spk::display_mode_create_info_khr const& pCreateInfo); )",
+
+     R"(inline spk::display_mode_khr display_khr::create_display_mode_khr(
+    spk::display_mode_create_info_khr const& pCreateInfo) {
+  spk::display_mode_khr_ref result_;
+  dispatch_table().create_display_mode_khr(parent_, handle_, &pCreateInfo,
+                                           allocation_callbacks_, &result_);
+  return {result_, parent_, dispatch_table(), allocation_callbacks_};
+}
+)"}
+
+};
+}  // namespace sps
+namespace {
 
 std::map<std::string, std::string> handle_parents = {
     {"instance", ""},
@@ -429,7 +589,12 @@ std::map<std::string, std::string> handle_parents = {
     {"display_khr", "physical_device"},
     {"buffer", "device"},
     {"surface_khr", "instance"},
-    {"event", "device"}};
+    {"event", "device"},
+    {"query_pool", "device"},
+    {"image", "device"},
+    {"pipeline_layout", "device"},
+    {"pipeline", "device"},
+    {"command_buffer", "device"}};
 
 const sps::Handle* get_handle(const vks::Type* t) {
   if (t == nullptr) return nullptr;
@@ -464,10 +629,24 @@ const sps::MemberFunction* classify_command(sps::Registry& sreg,
     }
   }
 
-  if (manual_translation_commands.count(name)) return nullptr;
-
   clas->main_handle = second_handle ? second_handle : dispatch_handle;
   clas->parent_dispatch = second_handle;
+
+  if (!dvc::startswith(name, "destroy_") && second_handle &&
+      command->params.at(1).param->get_optional(0)) {
+    second_handle = nullptr;
+    clas->main_handle = dispatch_handle;
+    clas->parent_dispatch = false;
+  }
+
+  for (const auto& manual_translation : sps::Registry::manual_translations)
+    if (manual_translation.command == name) {
+      CHECK(!manual_translation_commands.count(name)) << name;
+      clas->manual_translation = manual_translation;
+      return clas;
+    }
+
+  if (manual_translation_commands.count(name)) return nullptr;
 
   if (dvc::startswith(name, "destroy_")) {
     CHECK_EQ(name, "destroy_" + clas->main_handle->fullname);
@@ -521,6 +700,10 @@ const sps::MemberFunction* classify_command(sps::Registry& sreg,
     }
   }
 
+  if (auto result_handle = get_handle(clas->res)) {
+    clas->result_handle = result_handle;
+  }
+
   std::unordered_set<std::string> param_names;
   for (const sps::Param& param : command->params)
     param_names.insert(param.name);
@@ -542,8 +725,11 @@ const sps::MemberFunction* classify_command(sps::Registry& sreg,
     }
 
   for (auto x : szptr_pairs) {
-    if (x.second.size() != 1 || x.second.at(0) != x.first + 1)
-      LOG(FATAL) << name;
+    std::string sztype = command->params.at(x.first).stype->to_string();
+    if (sztype != "uint32_t" && sztype != "size_t" && sztype != "uint64_t") {
+      continue;
+    }
+    if (x.second.size() != 1 || x.second.at(0) != x.first + 1) continue;
     clas->szptrs.insert(x.first);
   }
 
@@ -614,64 +800,11 @@ void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
     }
   }
 
-  //  auto get_handle = [](const vks::Type* t) -> const sps::Handle* {
-  //    auto n = dynamic_cast<const sps::Name*>(t);
-  //    if (!n) return nullptr;
-  //    return dynamic_cast<const sps::Handle*>(n->entity);
-  //  };
-  //
-  //  auto get_ptr_handle = [&](const vks::Type* t) -> const sps::Handle* {
-  //    auto p = dynamic_cast<const vks::Pointer*>(t);
-  //    if (!p) return nullptr;
-  //    return get_handle(p->T);
-  //  };
-
   for (const sps::Command* command : sreg.commands) {
     const sps::MemberFunction* clas = classify_command(sreg, vreg, command);
     if (!clas) continue;
     sps::Handle* handle = sreg.handle_map.at(clas->main_handle->handle);
     handle->member_functions.push_back(clas);
-    //    CHECK(chandle == handle);
-    //    if (command->params.size() == 0) return;
-    //    const sps::Handle* chandle = nullptr;
-    //    sps::MemberFunctionKind kind;
-    //    if (dvc::startswith(command->name, "create_") ||
-    //        dvc::startswith(command->name, "allocate_")) {
-    //      chandle = get_ptr_handle(command->params.back().stype);
-    //      kind = sps::MemberFunctionKind::CONSTRUCTOR;
-    //      CHECK(chandle);
-    //    } else {
-    //      const sps::Handle* first_handle =
-    //      get_handle(command->params.at(0).stype); if (!first_handle)
-    //      continue; const sps::Handle* second_handle = nullptr; if
-    //      (command->params.size() > 1) {
-    //        second_handle = get_handle(command->params.at(1).stype);
-    //      }
-    //      if (second_handle &&
-    //          (!second_handle->handle->parents.count(first_handle->handle)
-    //          ||
-    //           !command->params.at(1).param->get_optional(0)))
-    //        second_handle = nullptr;
-    //
-    //      if (dvc::startswith(command->name, "destroy_")) {
-    //        kind = second_handle ?
-    //        sps::MemberFunctionKind::DOUBLE_DESTRUCTOR
-    //                             :
-    //                             sps::MemberFunctionKind::SINGLE_DESTRUCTOR;
-    //
-    //      } else {
-    //        kind = second_handle ? sps::MemberFunctionKind::DOUBLE_HANDLE
-    //                             : sps::MemberFunctionKind::SINGLE_HANDLE;
-    //      }
-    //      chandle = second_handle ? second_handle : first_handle;
-    //    }
-    //
-    //    sps::Handle* handle = sreg.handle_map.at(chandle->handle);
-    //    CHECK(chandle == handle);
-    //    sps::MemberFunction member_function;
-    //    member_function.kind = kind;
-    //    member_function.command = command;
-    //    handle->member_functions.push_back(member_function);
   }
 
   std::unordered_map<std::string, const sps::Handle*> handle_names;

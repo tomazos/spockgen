@@ -3,13 +3,13 @@ package(default_visibility = ["//visibility:public"])
 genrule(
   name = "spock_generate",
   srcs = [
-	"//data:vk82.xml",
+	"//data:vk97.xml",
   ],
   outs = [
      "spock.h",
   ],
   cmd = "$(location //vkxmlc) " +
-        "--vkxml $(location //data:vk82.xml) " +
+        "--vkxml $(location //data:vk97.xml) " +
         "--outh $(location spock.h)",
   tools = [
      "//vkxmlc",
@@ -25,6 +25,9 @@ cc_library(
   ],
   srcs = [
       "loader.cc",
+  ],
+  deps = [
+      "//SDL2",
   ],
   linkopts = [
     "-ldl",

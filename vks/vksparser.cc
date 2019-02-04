@@ -161,7 +161,8 @@ void parse_enumerations(vks::Registry& registry, const vkr::start& start) {
   for (const vkr::Enums& enums : start.enums) {
     CHECK(enums.name);
     std::string name = enums.name.value();
-    if (name == "API Constants") continue;
+    if (name == "API Constants" || name == "VkRenderPassCreateFlagBits")
+      continue;
     CHECK(types.count(name));
     CHECK(enums.type) << enums.name.value();
     const vkr::Type& type = (*types.at(name));
