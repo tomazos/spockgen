@@ -741,7 +741,7 @@ class SchemaParser : public dvc::parser<Token> {
   }
 };
 
-ast::Schema parse_schema(const dvc::fspath& schema_path) {
+ast::Schema parse_schema(const std::filesystem::path& schema_path) {
   SchemaScanner scanner(schema_path.filename().string(),
                         dvc::load_file(schema_path));
   std::vector<Token> tokens;
@@ -761,8 +761,8 @@ ast::Schema parse_schema(const dvc::fspath& schema_path) {
 DEFINE_string(namespace, "relaxnggen", "namespace to put generated code in");
 DEFINE_string(protocol, "", "protocol name");
 
-void generate_relaxng_parser(const dvc::fspath& schema_file,
-                             const dvc::fspath& hout) {
+void generate_relaxng_parser(const std::filesystem::path& schema_file,
+                             const std::filesystem::path& hout) {
   ast::Schema schema = parse_schema(schema_file);
   dvc::file_writer w(hout, dvc::truncate);
 
@@ -1024,8 +1024,8 @@ int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   if (FLAGS_schema.empty()) LOG(FATAL) << "--schema required";
   if (FLAGS_protocol.empty()) LOG(FATAL) << "--protocol required";
-  dvc::fspath schema = FLAGS_schema;
+  std::filesystem::path schema = FLAGS_schema;
   if (!exists(schema)) LOG(FATAL) << "File not found: " << schema;
-  dvc::fspath hout = FLAGS_hout;
+  std::filesystem::path hout = FLAGS_hout;
   generate_relaxng_parser(schema, hout);
 }

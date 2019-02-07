@@ -569,28 +569,31 @@ return pipelines;
 )"},
     {"swapchain_khr", "get_swapchain_images_khr",
      R"(
-inline std::vector<spk::image> get_swapchain_images_khr();
-)",
+     inline std::vector<spk::image> images_khr();
+    )",
      R"(
-inline std::vector<spk::image> swapchain_khr::get_swapchain_images_khr() {
-  uint32_t size_;
-  spk::result success1_ = dispatch_table().get_swapchain_images_khr(
-      parent_, handle_, &size_, nullptr);
-  if (success1_ != spk::result::success)
-    throw spk::unexpected_command_result(success1_, "vkGetSwapchainImagesKHR");
-  std::vector<spk::image_ref> result_(size_);
-  spk::result success2_ = dispatch_table().get_swapchain_images_khr(
-      parent_, handle_, &size_, result_.data());
-  if (success2_ != spk::result::success)
-    throw spk::unexpected_command_result(success2_, "vkGetSwapchainImagesKHR");
-  std::vector<spk::image> result2_;
-  result2_.reserve(size_);
-  for (auto ref : result_)
-    result2_.emplace_back(ref, parent_, dispatch_table(),
-                          allocation_callbacks_);
-  return result2_;
-}
-)"},
+     inline std::vector<spk::image> swapchain_khr::images_khr()
+     {
+      uint32_t size_;
+      spk::result success1_ = dispatch_table().get_swapchain_images_khr(
+          parent_, handle_, &size_, nullptr);
+      if (success1_ != spk::result::success)
+        throw spk::unexpected_command_result(success1_,
+        "vkGetSwapchainImagesKHR");
+      std::vector<spk::image_ref> result_(size_);
+      spk::result success2_ = dispatch_table().get_swapchain_images_khr(
+          parent_, handle_, &size_, result_.data());
+      if (success2_ != spk::result::success)
+        throw spk::unexpected_command_result(success2_,
+        "vkGetSwapchainImagesKHR");
+      std::vector<spk::image> result2_;
+      result2_.reserve(size_);
+      for (auto ref : result_)
+        result2_.emplace_back(ref, parent_, dispatch_table(),
+                              allocation_callbacks_);
+      return result2_;
+    }
+    )"},
     {"display_khr", "create_display_mode_khr",
      R"(inline spk::display_mode_khr create_display_mode_khr(
     spk::display_mode_create_info_khr const& pCreateInfo); )",

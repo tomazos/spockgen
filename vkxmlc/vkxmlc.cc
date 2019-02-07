@@ -533,6 +533,8 @@ inline spk::device_dispatch_table load_device_dispatch_table(
           "= VK_NULL_HANDLE; }");
     }
     h.println();
+    h.println("void release() { handle_ = VK_NULL_HANDLE; }");
+    h.println();
     for (auto member_function : handle->member_functions) {
       if (member_function->command->command->platform)
         h.println(" #ifdef ",

@@ -16,13 +16,44 @@ genrule(
   ],
 )
 
-cc_binary(
-  name = "loadertest",
+genrule(
+  name = "triangletest_vert_generate",
   srcs = [
-     "loadertest.cc",
+	"triangletest.vert",
+  ],
+  outs = [
+     "triangletest.vert.spv",
+  ],
+  cmd = "glslc $(location triangletest.vert) " +
+        "-o $(location triangletest.vert.spv) ",
+        
+)
+
+genrule(
+  name = "triangletest_frag_generate",
+  srcs = [
+	"triangletest.frag",
+  ],
+  outs = [
+     "triangletest.frag.spv",
+  ],
+  cmd = "glslc $(location triangletest.frag) " +
+        "-o $(location triangletest.frag.spv) ",
+        
+)
+
+cc_binary(
+  name = "triangletest",
+  srcs = [
+     "triangletest.cc",
   ],
   deps = [
      "//spk:spock",
+     "//dvc:file",
+  ],
+  data = [
+     "triangletest.vert.spv",
+     "triangletest.frag.spv",
   ],
   linkopts = [
      "-lglog",
