@@ -154,16 +154,16 @@ class array_view<void> {
   size_t size_;
 };
 
-#define SPK_DEFINE_BITMASK_BITWISE_OPS(bitmask)                        \
-  inline bitmask operator~(bitmask a) { return bitmask(~VkFlags(a)); } \
-  inline bitmask operator|(bitmask a, bitmask b) {                     \
-    return bitmask(VkFlags(a) | VkFlags(b));                           \
-  }                                                                    \
-  inline VkFlags operator&(bitmask a, bitmask b) {                     \
-    return VkFlags(a) & VkFlags(b);                                    \
-  }                                                                    \
-  inline bitmask operator^(bitmask a, bitmask b) {                     \
-    return bitmask(VkFlags(a) ^ VkFlags(b));                           \
+#define SPK_DEFINE_BITMASK_BITWISE_OPS(bitmask)                           \
+  constexpr bitmask operator~(bitmask a) { return bitmask(~VkFlags(a)); } \
+  constexpr bitmask operator|(bitmask a, bitmask b) {                     \
+    return bitmask(VkFlags(a) | VkFlags(b));                              \
+  }                                                                       \
+  constexpr VkFlags operator&(bitmask a, bitmask b) {                     \
+    return VkFlags(a) & VkFlags(b);                                       \
+  }                                                                       \
+  constexpr bitmask operator^(bitmask a, bitmask b) {                     \
+    return bitmask(VkFlags(a) ^ VkFlags(b));                              \
   }
 
 #define SPK_BEGIN_BITMASK_OUTPUT(enumeration) \

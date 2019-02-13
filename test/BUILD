@@ -1,3 +1,5 @@
+load('//:glsl.bzl','glsl_shader')
+
 genrule(
   name = "vkxmltest_generate",
   srcs = [
@@ -16,44 +18,59 @@ genrule(
   ],
 )
 
-genrule(
-  name = "triangletest_vert_generate",
-  srcs = [
-	"triangletest.vert",
-  ],
-  outs = [
-     "triangletest.vert.spv",
-  ],
-  cmd = "glslc $(location triangletest.vert) " +
-        "-o $(location triangletest.vert.spv) ",
-        
+glsl_shader(
+  name = "triangletest1_vert",
+  src = "triangletest1.vert",
 )
 
-genrule(
-  name = "triangletest_frag_generate",
-  srcs = [
-	"triangletest.frag",
-  ],
-  outs = [
-     "triangletest.frag.spv",
-  ],
-  cmd = "glslc $(location triangletest.frag) " +
-        "-o $(location triangletest.frag.spv) ",
-        
+glsl_shader(
+  name = "triangletest1_frag",
+  src = "triangletest1.frag",
+)
+
+glsl_shader(
+  name = "pointtest_vert",
+  src = "pointtest.vert",
+)
+
+glsl_shader(
+  name = "pointtest_frag",
+  src = "pointtest.frag",
 )
 
 cc_binary(
-  name = "triangletest",
+  name = "pointtest",
   srcs = [
-     "triangletest.cc",
+     "pointtest.cc",
   ],
   deps = [
      "//spk:spock",
      "//dvc:file",
+     "//dvc:terminate",
   ],
   data = [
-     "triangletest.vert.spv",
-     "triangletest.frag.spv",
+     "pointtest.vert.spv",
+     "pointtest.frag.spv",
+  ],
+  linkopts = [
+     "-lglog",
+     "-lgflags",
+  ],
+)
+
+cc_binary(
+  name = "triangletest1",
+  srcs = [
+     "triangletest1.cc",
+  ],
+  deps = [
+     "//spk:spock",
+     "//dvc:file",
+     "//dvc:terminate",
+  ],
+  data = [
+     "triangletest1.vert.spv",
+     "triangletest1.frag.spv",
   ],
   linkopts = [
      "-lglog",

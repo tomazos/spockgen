@@ -3,11 +3,15 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <functional>
+#include <glm/glm.hpp>
+#include <random>
 #include <set>
 
 #include "dvc/file.h"
+#include "dvc/terminate.h"
 #include "spk/loader.h"
 #include "spk/spock.h"
 
@@ -22,6 +26,10 @@ using debug_utils_messenger_callback =
 }  // namespace spk
 
 namespace {
+
+DEFINE_bool(trace_allocations, false, "trace vulkan allocations");
+DEFINE_uint64(num_frames, 2, "num of frames in flight");
+DEFINE_uint64(num_points, 100, "num of points");
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
 debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -41,7 +49,7 @@ spk::debug_utils_messenger_callback debug_utils_messenger_callback =
     [](spk::debug_utils_message_severity_flags_ext severity,
        spk::debug_utils_message_type_flags_ext type,
        const spk::debug_utils_messenger_callback_data_ext* data) {
-      LOG(ERROR) << severity << ": " << type << ": " << data->message();
+      std::cerr << data->message() << std::endl;
     };
 
 std::vector<std::string> get_sdl_extensions(SDL_Window* window) {
@@ -66,8 +74,11 @@ void setup_sdl() {
 
 SDL_Window* create_window() {
   SDL_Window* window = SDL_CreateWindow(
-      "loadertest", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0,
+      "pointtest", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0,
       SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_VULKAN);
+  //  SDL_Window* window =
+  //      SDL_CreateWindow("pointtest", SDL_WINDOWPOS_CENTERED,
+  //                       SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_VULKAN);
   if (!window) LOG(FATAL) << SDL_GetError();
   return window;
 }
@@ -94,12 +105,14 @@ create_debug_utils_messenger_create_info() {
   return debug_utils_messenger_create_info;
 }
 
-spk::instance create_instance(spk::loader& loader,
-                              const std::vector<std::string>& extensions) {
+spk::instance create_instance(
+    spk::loader& loader, const std::vector<std::string>& extensions,
+    const spk::allocation_callbacks* allocation_callbacks) {
   spk::instance_create_info instance_create_info;
   const char* layers[] = {"VK_LAYER_LUNARG_standard_validation"};
   instance_create_info.set_pp_enabled_layer_names({layers, 1});
-  std::vector<const char*> cextensions = {spk::ext_debug_utils_extension_name};
+  std::vector<const char*> cextensions = {spk::ext_debug_utils_extension_name,
+                                          spk::ext_debug_report_extension_name};
   for (const std::string& extension : extensions)
     cextensions.push_back(extension.c_str());
   instance_create_info.set_pp_enabled_extension_names(
@@ -109,7 +122,8 @@ spk::instance create_instance(spk::loader& loader,
       create_debug_utils_messenger_create_info();
   instance_create_info.set_next(&debug_utils_messenger_create_info);
 
-  spk::instance instance = loader.create_instance(instance_create_info);
+  spk::instance instance =
+      loader.create_instance(instance_create_info, allocation_callbacks);
   return instance;
 }
 
@@ -294,7 +308,7 @@ Swapchain create_swapchain(spk::physical_device& physical_device,
   spk::extent_2d swap_extent = get_swap_extent(surface_info, window);
   CHECK_LE(surface_info.capabilities.min_image_count(),
            surface_info.capabilities.max_image_count());
-  uint32_t num_images = surface_info.capabilities.min_image_count() + 1;
+  uint32_t num_images = surface_info.capabilities.min_image_count() + 2;
   if (surface_info.capabilities.max_image_count() < num_images)
     num_images = surface_info.capabilities.max_image_count();
 
@@ -342,15 +356,6 @@ spk::image_view create_image_view(spk::device& device, spk::image& image,
   return device.create_image_view(info);
 }
 
-std::vector<spk::image_view> create_image_views(spk::device& device,
-                                                std::vector<spk::image>& images,
-                                                Swapchain& swapchain) {
-  std::vector<spk::image_view> result;
-  for (spk::image& image : images)
-    result.push_back(create_image_view(device, image, swapchain));
-  return result;
-}
-
 spk::shader_module create_shader(spk::device& device,
                                  const std::filesystem::path& path) {
   CHECK(exists(path)) << "file not found: " << path;
@@ -368,11 +373,153 @@ struct Pipeline {
   spk::pipeline pipeline;
 };
 
+struct Vertex {
+  glm::vec2 pos;
+  glm::vec3 color;
+};
+
+struct PointMass {
+  glm::vec2 pos;
+  glm::vec3 color;
+  glm::vec2 velocity;
+  void update(float alpha, float beta, float gamma, glm::vec2 mouse_pos) {
+    glm::vec2 dmouse = mouse_pos - pos;
+
+    velocity += beta * dmouse;
+
+    velocity *= 1 - gamma;
+
+    pos += alpha * velocity;
+
+    while (pos.x > 1) pos.x -= 2;
+    while (pos.x < -1) pos.x += 2;
+    while (pos.y > 1) pos.y -= 2;
+    while (pos.y < -1) pos.y += 2;
+  }
+};
+
+spk::vertex_input_binding_description get_vertex_input_binding_description() {
+  spk::vertex_input_binding_description vertex_input_binding_description;
+  vertex_input_binding_description.set_binding(0);
+  vertex_input_binding_description.set_input_rate(
+      spk::vertex_input_rate::vertex);
+  vertex_input_binding_description.set_stride(sizeof(Vertex));
+  return vertex_input_binding_description;
+}
+
+std::array<spk::vertex_input_attribute_description, 2>
+get_vertex_input_attribute_descriptions() {
+  std::array<spk::vertex_input_attribute_description, 2> result;
+  result[0].set_binding(0);
+  result[0].set_location(0);
+  result[0].set_format(spk::format::r32g32_sfloat);
+  result[0].set_offset(offsetof(Vertex, pos));
+  result[1].set_binding(0);
+  result[1].set_location(1);
+  result[1].set_offset(offsetof(Vertex, color));
+  result[1].set_format(spk::format::r32g32b32_sfloat);
+  return result;
+}
+
+spk::buffer create_buffer(spk::device& device) {
+  spk::buffer_create_info buffer_create_info;
+  buffer_create_info.set_size(sizeof(Vertex) * FLAGS_num_points);
+  buffer_create_info.set_usage(spk::buffer_usage_flags::vertex_buffer);
+  buffer_create_info.set_sharing_mode(spk::sharing_mode::exclusive);
+  return device.create_buffer(buffer_create_info);
+}
+
+uint32_t find_compatible_memory_type(spk::physical_device& physical_device,
+                                     spk::buffer& buffer) {
+  const spk::memory_requirements memory_requirements =
+      buffer.memory_requirements();
+
+  static constexpr spk::memory_property_flags flags =
+      spk::memory_property_flags::host_visible |
+      spk::memory_property_flags::host_coherent;
+
+  spk::physical_device_memory_properties memory_properties =
+      physical_device.memory_properties();
+  for (uint32_t i = 0; i < memory_properties.memory_type_count(); ++i) {
+    if (!(memory_requirements.memory_type_bits() & (1 << i))) continue;
+    if (memory_properties.memory_types()[i].property_flags() & flags) return i;
+  }
+  LOG(FATAL) << "no compatible memory type found";
+}
+
+spk::device_memory create_memory(spk::physical_device& physical_device,
+                                 spk::device& device, spk::buffer& buffer) {
+  const spk::memory_requirements memory_requirements =
+      buffer.memory_requirements();
+  spk::memory_allocate_info memory_allocate_info;
+  memory_allocate_info.set_allocation_size(memory_requirements.size());
+  memory_allocate_info.set_memory_type_index(
+      find_compatible_memory_type(physical_device, buffer));
+  return device.allocate_memory(memory_allocate_info);
+}
+
+struct World {
+  World(size_t num_points) : num_points(num_points), points(FLAGS_num_points) {
+    rng.seed(std::random_device()());
+
+    for (size_t i = 0; i < num_points; ++i) {
+      points[i].pos = glm::vec2{normal(), normal()};
+      points[i].color = glm::vec3{normal(), normal(), normal()};
+      points[i].velocity = glm::vec2{normal(), normal()};
+      points[i].update(0, 0, 0, glm::vec2{0, 0});
+    }
+  }
+
+  void update(float alpha, float beta, float gamma) {
+    for (auto& point : points) point.update(alpha, beta, gamma, mouse_pos);
+  }
+
+  float normal() { return normal_(rng); }
+
+  void set_mouse_pos(glm::vec2 mouse_pos) { this->mouse_pos = mouse_pos; }
+
+  glm::vec2 mouse_pos;
+  std::normal_distribution<float> normal_;
+  std::mt19937 rng;
+  size_t num_points;
+  std::vector<PointMass> points;
+};
+
+struct VertexBuffer {
+  spk::buffer buffer;
+  spk::device_memory device_memory;
+  uint64_t size;
+  void* data;
+
+  void map() { device_memory.map_memory(0, size, data); }
+  void unmap() { device_memory.unmap_memory(); }
+  void update(const World& world) {
+    Vertex* v = (Vertex*)data;
+    for (size_t i = 0; i < world.num_points; ++i) {
+      v[i].color = world.points[i].color;
+      v[i].pos = world.points[i].pos;
+    }
+  }
+};
+
+VertexBuffer create_vertex_buffer(spk::physical_device& physical_device,
+                                  spk::device& device) {
+  spk::buffer buffer = create_buffer(device);
+  const spk::memory_requirements memory_requirements =
+      buffer.memory_requirements();
+  spk::device_memory device_memory =
+      create_memory(physical_device, device, buffer);
+  buffer.bind_memory(device_memory, 0);
+
+  return {std::move(buffer), std::move(device_memory),
+          memory_requirements.size()};
+}
+
 Pipeline create_pipeline(spk::device& device, Swapchain& swapchain) {
   spk::shader_module vertex_shader =
-      create_shader(device, "test/triangletest.vert.spv");
+      create_shader(device, "test/pointtest.vert.spv");
   spk::shader_module fragment_shader =
-      create_shader(device, "test/triangletest.frag.spv");
+      create_shader(device, "test/pointtest.frag.spv");
 
   spk::pipeline_shader_stage_create_info vertex_shader_stage_create_info;
   vertex_shader_stage_create_info.set_module(vertex_shader);
@@ -388,10 +535,18 @@ Pipeline create_pipeline(spk::device& device, Swapchain& swapchain) {
   spk::pipeline_shader_stage_create_info pipeline_shader_stage_create_infos[2] =
       {vertex_shader_stage_create_info, fragment_shader_stage_create_info};
 
+  spk::vertex_input_binding_description binding_description =
+      get_vertex_input_binding_description();
+  std::array<spk::vertex_input_attribute_description, 2> binding_attributes =
+      get_vertex_input_attribute_descriptions();
+
   spk::pipeline_vertex_input_state_create_info vertex_input_info;
+  vertex_input_info.set_vertex_binding_descriptions({&binding_description, 1});
+  vertex_input_info.set_vertex_attribute_descriptions(
+      {binding_attributes.data(), 2});
 
   spk::pipeline_input_assembly_state_create_info input_assembly;
-  input_assembly.set_topology(spk::primitive_topology::triangle_list);
+  input_assembly.set_topology(spk::primitive_topology::point_list);
   input_assembly.set_primitive_restart_enable(false);
 
   spk::viewport viewport;
@@ -474,29 +629,234 @@ Pipeline create_pipeline(spk::device& device, Swapchain& swapchain) {
           std::move(pipeline)};
 }
 
-void main_loop(spk::device& device, Swapchain& swapchain, spk::queue& queue,
-               std::vector<spk::command_buffer>& command_buffers) {
-  spk::semaphore image_available_semaphore =
-      device.create_semaphore(spk::semaphore_create_info{});
-  spk::semaphore render_finished_semaphore =
-      device.create_semaphore(spk::semaphore_create_info{});
+spk::semaphore create_semaphore(spk::device& device) {
+  return device.create_semaphore(spk::semaphore_create_info{});
+}
 
+spk::fence create_signaled_fence(spk::device& device) {
+  spk::fence_create_info fence_create_info;
+  fence_create_info.set_flags(spk::fence_create_flags::signaled);
+  return device.create_fence(fence_create_info);
+}
+
+struct Framebuffer {
+  Framebuffer(Framebuffer&&) = default;
+
+  spk::image image;
+  spk::image_view image_view;
+  spk::framebuffer framebuffer;
+
+  ~Framebuffer() {
+    if (spk::image_ref(image) != VK_NULL_HANDLE) image.release();
+  }
+};
+
+Framebuffer create_framebuffer(spk::device& device, Swapchain& swapchain,
+                               Pipeline& pipeline, spk::image image) {
+  spk::image_view image_view = create_image_view(device, image, swapchain);
+
+  spk::framebuffer_create_info info;
+  info.set_render_pass(pipeline.render_pass);
+  spk::image_view_ref attachment = image_view;
+  info.set_attachments({&attachment, 1});
+  info.set_width(swapchain.extent.width());
+  info.set_height(swapchain.extent.height());
+  info.set_layers(1);
+  spk::framebuffer framebuffer = device.create_framebuffer(info);
+
+  return {std::move(image), std::move(image_view), std::move(framebuffer)};
+}
+
+std::vector<Framebuffer> create_framebuffers(spk::device& device,
+                                             Swapchain& swapchain,
+                                             Pipeline& pipeline) {
+  std::vector<Framebuffer> framebuffers;
+
+  std::vector<spk::image> images = swapchain.images_khr();
+
+  for (spk::image& image : images) {
+    Framebuffer framebuffer =
+        create_framebuffer(device, swapchain, pipeline, std::move(image));
+    framebuffers.push_back(std::move(framebuffer));
+  }
+
+  return framebuffers;
+}
+
+spk::command_pool create_command_pool(spk::device& device,
+                                      uint32_t queue_family_index) {
+  spk::command_pool_create_info pool_info;
+  pool_info.set_queue_family_index(queue_family_index);
+  return device.create_command_pool(pool_info);
+}
+
+spk::command_buffer create_command_buffer(
+    spk::device& device, spk::command_pool& command_pool, Pipeline& pipeline,
+    Framebuffer& framebuffer, Swapchain& swapchain, VertexBuffer& buffer) {
+  spk::command_buffer_allocate_info command_buffer_allocate_info;
+  command_buffer_allocate_info.set_command_pool(command_pool);
+  command_buffer_allocate_info.set_level(spk::command_buffer_level::primary);
+  command_buffer_allocate_info.set_command_buffer_count(1);
+
+  spk::command_buffer command_buffer = std::move(
+      device.allocate_command_buffers(command_buffer_allocate_info).at(0));
+
+  spk::command_buffer_begin_info command_buffer_begin_info;
+  command_buffer_begin_info.set_flags(
+      spk::command_buffer_usage_flags::simultaneous_use);
+  command_buffer.begin(command_buffer_begin_info);
+
+  spk::render_pass_begin_info render_pass_info;
+  render_pass_info.set_render_pass(pipeline.render_pass);
+  render_pass_info.set_framebuffer(framebuffer.framebuffer);
+  spk::rect_2d render_area;
+  render_area.set_extent(swapchain.extent);
+  render_pass_info.set_render_area(render_area);
+  spk::clear_color_value clear_color_value;
+  clear_color_value.set_float_32({0, 0, 0, 1});
+  spk::clear_value clear_color;
+  clear_color.set_color(clear_color_value);
+  render_pass_info.set_clear_values({&clear_color, 1});
+  command_buffer.begin_render_pass(render_pass_info,
+                                   spk::subpass_contents::inline_);
+  command_buffer.bind_pipeline(spk::pipeline_bind_point::graphics,
+                               pipeline.pipeline);
+  spk::buffer_ref buffer_ref = buffer.buffer;
+  uint64_t offset = 0;
+  command_buffer.bind_vertex_buffers(0, 1, &buffer_ref, &offset);
+  command_buffer.draw(FLAGS_num_points, 1, 0, 0);
+  command_buffer.end_render_pass();
+  command_buffer.end();
+  return command_buffer;
+}
+
+struct Commands {
+  spk::command_pool command_pool;
+  std::vector<spk::command_buffer> command_buffers;
+};
+
+Commands create_commands(spk::device& device, uint32_t queue_family_index,
+                         Pipeline& pipeline,
+                         std::vector<Framebuffer>& framebuffers,
+                         Swapchain& swapchain,
+                         std::vector<VertexBuffer>& buffers) {
+  spk::command_pool command_pool =
+      create_command_pool(device, queue_family_index);
+
+  std::vector<spk::command_buffer> command_buffers;
+  for (VertexBuffer& buffer : buffers)
+    for (Framebuffer& framebuffer : framebuffers)
+      command_buffers.push_back(create_command_buffer(
+          device, command_pool, pipeline, framebuffer, swapchain, buffer));
+
+  return {std::move(command_pool), std::move(command_buffers)};
+}
+
+void main_loop(spk::device& device, Swapchain& swapchain, spk::queue& queue,
+               std::vector<spk::command_buffer>& command_buffers,
+               std::vector<VertexBuffer>& buffers, World& world,
+               int window_width, int window_height) {
+  std::vector<spk::semaphore> image_available_semaphores;
+  std::vector<spk::semaphore> render_finished_semaphores;
+  std::vector<spk::fence> fences;
+
+  size_t num_frames = FLAGS_num_frames;
+  CHECK_EQ(num_frames, buffers.size());
+  size_t num_images = command_buffers.size() / num_frames;
+  size_t current_frame = 0;
+
+  for (size_t i = 0; i < num_frames; i++) {
+    image_available_semaphores.push_back(create_semaphore(device));
+    render_finished_semaphores.push_back(create_semaphore(device));
+    fences.push_back(create_signaled_fence(device));
+  }
+
+  size_t niterations = 0;
+  size_t nnofence = 0;
+  size_t nnoacquire = 0;
+  size_t npresent = 0;
+
+  uint32_t last_report = SDL_GetTicks();
+
+loop:
   while (1) {
+    if (SDL_GetTicks() > last_report + 1000) {
+      last_report = SDL_GetTicks();
+      LOG(ERROR) << "niterations " << niterations << " nnofence " << nnofence
+                 << " nnoacquire " << nnoacquire << " npresent " << npresent;
+      niterations = 0;
+      nnofence = 0;
+      nnoacquire = 0;
+      npresent = 0;
+    }
+    niterations++;
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
       switch (event.type) {
         case SDL_QUIT:
-          return;
+          goto done;
         case SDL_KEYDOWN:
-          if (event.key.keysym.sym == SDLK_q) return;
+          if (event.key.keysym.sym == SDLK_q) goto done;
+          break;
+        case SDL_MOUSEBUTTONDOWN:
+          LOG(ERROR) << "SDL_MOUSEBUTTONDOWN " << int(event.button.button);
+          break;
+        case SDL_MOUSEBUTTONUP:
+          LOG(ERROR) << "SDL_MOUSEBUTTONUP " << int(event.button.button);
+          break;
+        case SDL_MOUSEMOTION:
+          LOG(ERROR) << "SDL_MOUSEMOTION x " << event.motion.x << " y "
+                     << event.motion.y << " xrel " << event.motion.xrel
+                     << " yrel " << event.motion.yrel;
+          float mouse_x = event.motion.x;
+          float mouse_y = event.motion.y;
+          world.set_mouse_pos(glm::vec2{2 * mouse_x / window_width - 1,
+                                        2 * mouse_y / window_height - 1});
+
+          break;
       }
     }
 
+    spk::semaphore_ref image_available_semaphore =
+        image_available_semaphores[current_frame];
+    spk::semaphore_ref render_finished_semaphore =
+        render_finished_semaphores[current_frame];
+    spk::fence_ref current_fence = fences[current_frame];
+    VertexBuffer& current_buffer = buffers[current_frame];
+
+    spk::result wait_for_fences_result =
+        device.wait_for_fences({&current_fence, 1}, true /*wait_all*/, 0);
+    switch (wait_for_fences_result) {
+      case spk::result::success:
+        break;
+      case spk::result::timeout:
+        nnofence++;
+        goto loop;
+      default:
+        LOG(FATAL) << "unexpected result " << wait_for_fences_result
+                   << " from wait_for_fences";
+    }
+
     uint32_t image_index;
-    CHECK_EQ(spk::result::success,
-             swapchain.acquire_next_image_khr(
-                 std::numeric_limits<uint64_t>::max(),
-                 image_available_semaphore, VK_NULL_HANDLE, image_index));
+    spk::result acquire_next_image_result = swapchain.acquire_next_image_khr(
+        0, image_available_semaphore, VK_NULL_HANDLE, image_index);
+
+    switch (acquire_next_image_result) {
+      case spk::result::success:
+        npresent++;
+        break;
+      case spk::result::not_ready:
+        nnoacquire++;
+        goto loop;
+      default:
+        LOG(FATAL) << "acquire_next_image_khr returned "
+                   << acquire_next_image_result;
+    }
+
+    world.update(0.01, 0.1, 0.01);
+    current_buffer.update(world);
+
+    device.reset_fences({&current_fence, 1});
 
     spk::submit_info submit_info;
     spk::pipeline_stage_flags wait_stages[] = {
@@ -504,32 +864,141 @@ void main_loop(spk::device& device, Swapchain& swapchain, spk::queue& queue,
     spk::semaphore_ref wait = image_available_semaphore;
     submit_info.set_wait_semaphores({&wait, 1});
     submit_info.set_wait_dst_stage_mask({wait_stages, 1});
-    spk::command_buffer_ref buf = command_buffers.at(image_index);
+    spk::command_buffer_ref buf =
+        command_buffers.at(current_frame * num_images + image_index);
     submit_info.set_command_buffers({&buf, 1});
     spk::semaphore_ref signal = render_finished_semaphore;
     submit_info.set_signal_semaphores({&signal, 1});
-    queue.submit({&submit_info, 1}, VK_NULL_HANDLE);
+    queue.submit({&submit_info, 1}, current_fence);
+
     spk::present_info_khr present_info;
     present_info.set_wait_semaphores({&signal, 1});
     spk::swapchain_khr_ref sc = swapchain;
     present_info.set_swapchains({&sc, 1});
     present_info.set_image_indices({&image_index, 1});
     queue.present_khr(present_info);
-    device.wait_idle();
+    current_frame = (current_frame + 1) % num_frames;
   }
+done:
+
+  for (spk::fence_ref fence : fences) {
+    CHECK_EQ(spk::result::success,
+             device.wait_for_fences({&fence, 1}, true /*wait_all*/,
+                                    std::numeric_limits<uint64_t>::max()));
+  }
+  queue.wait_idle();
+  device.wait_idle();
 }
 
-void triangle_test() {
+constexpr size_t roundup(size_t x, size_t f) {
+  size_t r = x % f;
+  if (r == 0)
+    return x;
+  else
+    return x - r + f;
+}
+
+struct AllocationHeader {
+  size_t payload_size;
+};
+static_assert(sizeof(AllocationHeader) % alignof(AllocationHeader) == 0);
+
+inline AllocationHeader* payload_to_header(void* payload) {
+  return (AllocationHeader*)(((char*)payload) - sizeof(AllocationHeader));
+}
+inline void* header_to_payload(AllocationHeader* header) {
+  return ((char*)header) + sizeof(AllocationHeader);
+}
+
+inline void* create_allocation(const size_t payload_size,
+                               const size_t payload_alignment) {
+  const size_t actual_alignment =
+      std::max(payload_alignment, alignof(AllocationHeader));
+  const size_t actual_size =
+      roundup(sizeof(AllocationHeader) + payload_size, actual_alignment);
+  AllocationHeader* header =
+      (AllocationHeader*)std::aligned_alloc(actual_alignment, actual_size);
+  if (header == nullptr) return nullptr;
+  header->payload_size = payload_size;
+  return header_to_payload(header);
+}
+
+struct Allocator {
+  void* allocate(size_t payload_size, size_t payload_alignment,
+                 spk::system_allocation_scope allocation_scope) {
+    void* new_payload = create_allocation(payload_size, payload_alignment);
+
+    LOG(ERROR) << "allocate size " << payload_size << " alignment "
+               << payload_alignment << " allocation_scope " << allocation_scope
+               << " ptr " << new_payload;
+    return new_payload;
+  }
+
+  void* reallocate(void* original_payload, size_t payload_size,
+                   size_t payload_alignment,
+                   spk::system_allocation_scope allocation_scope) {
+    void* new_payload = create_allocation(payload_size, payload_alignment);
+    if (new_payload != nullptr && original_payload != nullptr) {
+      AllocationHeader* original_header = payload_to_header(original_payload);
+      std::memcpy(new_payload, original_payload,
+                  std::min(original_header->payload_size, payload_size));
+      std::free(original_header);
+    }
+    LOG(ERROR) << "reallocate original " << original_payload << " size "
+               << payload_size << " alignment " << payload_alignment
+               << " allocation_scope " << allocation_scope << " ptr "
+               << new_payload;
+    return new_payload;
+  }
+
+  void free(void* memory) {
+    if (memory == nullptr) return;
+    AllocationHeader* header = payload_to_header(memory);
+    LOG(ERROR) << "free memory " << memory;
+    std::free(header);
+  }
+
+  void notify_internal_allocation(
+      size_t size, spk::internal_allocation_type allocation_type,
+      spk::system_allocation_scope allocation_scope) {
+    LOG(ERROR) << "notify_internal_allocation size " << size
+               << " allocation_type " << allocation_type << " allocation_scope "
+               << allocation_scope;
+  }
+
+  void notify_internal_free(size_t size,
+                            spk::internal_allocation_type allocation_type,
+                            spk::system_allocation_scope allocation_scope) {
+    LOG(ERROR) << "notify_internal_free size " << size << " allocation_type "
+               << allocation_type << " allocation_scope " << allocation_scope;
+  }
+};
+
+void pointtest() {
+  World world(FLAGS_num_points);
+
   setup_sdl();
+
+  CHECK_EQ(SDL_SetRelativeMouseMode(SDL_TRUE), 0) << SDL_GetError();
+
+  Allocator allocator;
+
+  spk::allocation_callbacks allocation_callbacks =
+      spk::create_allocation_callbacks(&allocator);
 
   spk::loader loader;
 
   std::unique_ptr<SDL_Window, void (&)(SDL_Window*)> window(create_window(),
                                                             destroy_window);
 
+  int window_width, window_height;
+  SDL_GetWindowSize(window.get(), &window_width, &window_height);
+
   std::vector<std::string> extensions = get_sdl_extensions(window.get());
 
-  spk::instance instance = create_instance(loader, extensions);
+  spk::instance instance = create_instance(
+      loader, extensions,
+      FLAGS_trace_allocations ? &allocation_callbacks : nullptr);
 
   spk::debug_utils_messenger_ext debug_utils_messenger =
       create_debug_utils_messenger(instance);
@@ -543,77 +1012,33 @@ void triangle_test() {
 
   spk::device device = create_device(physical_device, queue_family_index);
 
+  std::vector<VertexBuffer> buffers;
+
+  for (size_t i = 0; i < FLAGS_num_frames; ++i)
+    buffers.emplace_back(create_vertex_buffer(physical_device, device));
+
+  for (VertexBuffer& buffer : buffers) buffer.map();
+
   spk::queue queue = create_queue(device, queue_family_index);
 
   Swapchain swapchain =
       create_swapchain(physical_device, window.get(), surface, device);
 
-  std::vector<spk::image> images = swapchain.images_khr();
-
-  std::vector<spk::image_view> image_views =
-      create_image_views(device, images, swapchain);
-
   Pipeline pipeline = create_pipeline(device, swapchain);
 
-  std::vector<spk::framebuffer> framebuffers;
+  std::vector<Framebuffer> framebuffers =
+      create_framebuffers(device, swapchain, pipeline);
 
-  for (auto& image_view : image_views) {
-    spk::framebuffer_create_info info;
-    info.set_render_pass(pipeline.render_pass);
-    spk::image_view_ref attachment = image_view;
-    info.set_attachments({&attachment, 1});
-    info.set_width(swapchain.extent.width());
-    info.set_height(swapchain.extent.height());
-    info.set_layers(1);
-    framebuffers.push_back(device.create_framebuffer(info));
+  Commands commands = create_commands(device, queue_family_index, pipeline,
+                                      framebuffers, swapchain, buffers);
+
+  main_loop(device, swapchain, queue, commands.command_buffers, buffers, world,
+            window_width, window_height);
+
+  for (VertexBuffer& buffer : buffers) {
+    buffer.unmap();
+    device.free_memory(buffer.device_memory);
   }
-
-  spk::command_pool_create_info pool_info;
-  pool_info.set_queue_family_index(queue_family_index);
-
-  spk::command_pool command_pool = device.create_command_pool(pool_info);
-
-  spk::command_buffer_allocate_info command_buffer_allocate_info;
-  command_buffer_allocate_info.set_command_pool(command_pool);
-  command_buffer_allocate_info.set_level(spk::command_buffer_level::primary);
-  command_buffer_allocate_info.set_command_buffer_count(images.size());
-
-  std::vector<spk::command_buffer> command_buffers =
-      device.allocate_command_buffers(command_buffer_allocate_info);
-
-  for (size_t i = 0; i < command_buffers.size(); ++i) {
-    spk::command_buffer& command_buffer = command_buffers.at(i);
-    spk::command_buffer_begin_info command_buffer_begin_info;
-    command_buffer_begin_info.set_flags(
-        spk::command_buffer_usage_flags::simultaneous_use);
-    command_buffer.begin(command_buffer_begin_info);
-
-    spk::render_pass_begin_info render_pass_info;
-    render_pass_info.set_render_pass(pipeline.render_pass);
-    render_pass_info.set_framebuffer(framebuffers.at(i));
-    spk::rect_2d render_area;
-    render_area.set_extent(swapchain.extent);
-    render_pass_info.set_render_area(render_area);
-    spk::clear_color_value clear_color_value;
-    clear_color_value.set_float_32({0, 0, 0, 1});
-    spk::clear_value clear_color;
-    clear_color.set_color(clear_color_value);
-    render_pass_info.set_clear_values({&clear_color, 1});
-    command_buffer.begin_render_pass(render_pass_info,
-                                     spk::subpass_contents::inline_);
-    command_buffer.bind_pipeline(spk::pipeline_bind_point::graphics,
-                                 pipeline.pipeline);
-    command_buffer.draw(3, 1, 0, 0);
-    command_buffer.end_render_pass();
-    command_buffer.end();
-  }
-
-  (void)framebuffers;
-  (void)pipeline;
-
-  main_loop(device, swapchain, queue, command_buffers);
-
-  for (spk::image& image : images) image.release();
 }
 
 }  // namespace
@@ -621,6 +1046,8 @@ void triangle_test() {
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
+  dvc::install_terminate_handler();
+  google::InstallFailureFunction(dvc::log_stacktrace);
 
-  triangle_test();
+  pointtest();
 }

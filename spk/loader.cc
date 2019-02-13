@@ -84,6 +84,37 @@ std::vector<spk::extension_properties> loader::instance_extension_properties_(
   return v;
 }
 
+spk::allocation_callbacks allocator;
+
+// typedef void* (VKAPI_PTR *PFN_vkAllocationFunction)(
+//    void*                                       pUserData,
+//    size_t                                      size,
+//    size_t                                      alignment,
+//    VkSystemAllocationScope                     allocationScope);
+//
+// typedef void* (VKAPI_PTR *PFN_vkReallocationFunction)(
+//    void*                                       pUserData,
+//    void*                                       pOriginal,
+//    size_t                                      size,
+//    size_t                                      alignment,
+//    VkSystemAllocationScope                     allocationScope);
+//
+// typedef void (VKAPI_PTR *PFN_vkFreeFunction)(
+//    void*                                       pUserData,
+//    void*                                       pMemory);
+//
+// typedef void (VKAPI_PTR *PFN_vkInternalAllocationNotification)(
+//    void*                                       pUserData,
+//    size_t                                      size,
+//    VkInternalAllocationType                    allocationType,
+//    VkSystemAllocationScope                     allocationScope);
+//
+// typedef void (VKAPI_PTR *PFN_vkInternalFreeNotification)(
+//    void*                                       pUserData,
+//    size_t                                      size,
+//    VkInternalAllocationType                    allocationType,
+//    VkSystemAllocationScope                     allocationScope);
+
 spk::instance loader::create_instance(
     spk::instance_create_info const& create_info,
     spk::allocation_callbacks const* allocation_callbacks) const {

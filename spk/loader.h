@@ -8,6 +8,74 @@
 
 namespace spk {
 
+struct Allocator {
+  void* allocate(size_t size, size_t alignment,
+                 spk::system_allocation_scope allocation_scope);
+  void* reallocate(void* original, size_t size, size_t alignment,
+                   system_allocation_scope allocation_scope);
+  void free(void* memory);
+  void notify_internal_allocation(
+      size_t size, spk::internal_allocation_type allocation_type,
+      spk::system_allocation_scope allocation_scope);
+  void notify_internal_free(size_t size,
+                            spk::internal_allocation_type allocation_type,
+                            spk::system_allocation_scope allocation_scope);
+};
+
+template <typename Allocator>
+struct allocator_traits {
+  using allocator_type = Allocator;
+  using allocator_ptr = allocator_type*;
+
+  static void* allocate(void* user_data, size_t size, size_t alignment,
+                        VkSystemAllocationScope allocation_scope) {
+    return allocator_ptr(user_data)->allocate(
+        size, alignment, spk::system_allocation_scope(allocation_scope));
+  }
+  static void* reallocate(void* user_data, void* original, size_t size,
+                          size_t alignment,
+                          VkSystemAllocationScope allocation_scope) {
+    return allocator_ptr(user_data)->reallocate(
+        original, size, alignment,
+        spk::system_allocation_scope(allocation_scope));
+  }
+  static void free(void* user_data, void* memory) {
+    allocator_ptr(user_data)->free(memory);
+  }
+  static void notify_internal_allocation(
+      void* user_data, size_t size, VkInternalAllocationType allocation_type,
+      VkSystemAllocationScope allocation_scope) {
+    allocator_ptr(user_data)->notify_internal_allocation(
+        size, spk::internal_allocation_type(allocation_type),
+        spk::system_allocation_scope(allocation_scope));
+  }
+  static void notify_internal_free(void* user_data, size_t size,
+                                   VkInternalAllocationType allocation_type,
+                                   VkSystemAllocationScope allocation_scope) {
+    allocator_ptr(user_data)->notify_internal_free(
+        size, spk::internal_allocation_type(allocation_type),
+        spk::system_allocation_scope(allocation_scope));
+  }
+
+  static spk::allocation_callbacks create_allocation_callbacks(
+      allocator_ptr allocator) {
+    spk::allocation_callbacks callbacks;
+    callbacks.set_p_user_data(allocator);
+    callbacks.set_pfn_allocation(allocate);
+    callbacks.set_pfn_reallocation(reallocate);
+    callbacks.set_pfn_free(free);
+    callbacks.set_pfn_internal_allocation(notify_internal_allocation);
+    callbacks.set_pfn_internal_free(notify_internal_free);
+    return callbacks;
+  }
+};
+
+template <typename Allocator>
+spk::allocation_callbacks create_allocation_callbacks(Allocator* allocator) {
+  return spk::allocator_traits<Allocator>::create_allocation_callbacks(
+      allocator);
+}
+
 class loader {
  public:
   loader(const char* path = nullptr);

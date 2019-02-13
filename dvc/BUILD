@@ -44,3 +44,16 @@ cc_library(
         "string.h",
     ],
 )
+
+cc_library(
+    name = "terminate",
+    hdrs = [
+        "terminate.h",
+    ],
+    srcs = [
+        "terminate.cc",
+    ],
+    linkopts = [
+        "-lbacktrace",
+    ],
+)
