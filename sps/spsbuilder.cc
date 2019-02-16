@@ -455,11 +455,22 @@ physical_device::generated_commands_properties_nvx() {
 };)"},
     {"device", "create_graphics_pipelines",
      R"(
+inline spk::pipeline
+create_graphics_pipeline(spk::pipeline_cache_ref pipeline_cache,
+                          const spk::graphics_pipeline_create_info& create_info);
 inline std::vector<spk::pipeline>
 create_graphics_pipelines(spk::pipeline_cache_ref pipeline_cache,
                           spk::array_view<const spk::graphics_pipeline_create_info> create_infos);
 )",
      R"(
+inline spk::pipeline
+device::create_graphics_pipeline(spk::pipeline_cache_ref pipeline_cache,
+                          const spk::graphics_pipeline_create_info& create_info) {
+  spk::pipeline_ref ref;
+  dispatch_table().create_graphics_pipelines(handle_,pipeline_cache, 1, &create_info, allocation_callbacks_, &ref);
+  return {ref,*this,dispatch_table(),allocation_callbacks_};
+}
+
 inline std::vector<spk::pipeline>
 device::create_graphics_pipelines(spk::pipeline_cache_ref pipeline_cache,
                           spk::array_view<const spk::graphics_pipeline_create_info> create_infos) {
@@ -514,11 +525,22 @@ device::allocate_descriptor_sets(spk::descriptor_set_allocate_info& allocate_inf
     },
     {"device", "create_compute_pipelines",
      R"(
+    inline spk::pipeline
+    create_compute_pipeline(spk::pipeline_cache_ref pipeline_cache,
+                              const spk::compute_pipeline_create_info& create_info);
     inline std::vector<spk::pipeline>
     create_compute_pipelines(spk::pipeline_cache_ref pipeline_cache,
                               spk::array_view<const spk::compute_pipeline_create_info> create_infos);
     )",
      R"(
+inline spk::pipeline
+device::create_compute_pipeline(spk::pipeline_cache_ref pipeline_cache,
+                         const spk::compute_pipeline_create_info& create_info) {
+ spk::pipeline_ref pipeline_ref;
+ dispatch_table().create_compute_pipelines(handle_,pipeline_cache, 1, &create_info, allocation_callbacks_, &pipeline_ref);
+ return {pipeline_ref,*this,dispatch_table(),allocation_callbacks_};
+}
+
 inline std::vector<spk::pipeline>
 device::create_compute_pipelines(spk::pipeline_cache_ref pipeline_cache,
                          spk::array_view<const spk::compute_pipeline_create_info> create_infos) {
@@ -539,32 +561,44 @@ create_shared_swapchains_khr(spk::array_view<const spk::swapchain_create_info_kh
      R"(
 inline std::vector<spk::swapchain_khr>
 device::create_shared_swapchains_khr(spk::array_view<const spk::swapchain_create_info_khr> create_infos) {
-std::vector<spk::swapchain_khr_ref> swapchain_refs(create_infos.size());
-dispatch_table().create_shared_swapchains_khr(handle_, create_infos.size(), create_infos.data(), allocation_callbacks_, swapchain_refs.data());
-std::vector<spk::swapchain_khr> swapchains;
-swapchains.reserve(create_infos.size());
-for (auto swapchain_ref : swapchain_refs)
-swapchains.emplace_back(swapchain_ref,*this,dispatch_table(),allocation_callbacks_);
-return swapchains;
+  std::vector<spk::swapchain_khr_ref> swapchain_refs(create_infos.size());
+  dispatch_table().create_shared_swapchains_khr(handle_, create_infos.size(), create_infos.data(), allocation_callbacks_, swapchain_refs.data());
+  std::vector<spk::swapchain_khr> swapchains;
+  swapchains.reserve(create_infos.size());
+  for (auto swapchain_ref : swapchain_refs)
+    swapchains.emplace_back(swapchain_ref,*this,dispatch_table(),allocation_callbacks_);
+  return swapchains;
 }
 )"},
     {"device", "create_ray_tracing_pipelines_nv",
      R"(
+inline spk::pipeline
+create_ray_tracing_pipeline_nv(spk::pipeline_cache_ref pipeline_cache,
+                          const spk::ray_tracing_pipeline_create_info_nv& create_info);
+
 inline std::vector<spk::pipeline>
 create_ray_tracing_pipelines_nv(spk::pipeline_cache_ref pipeline_cache,
                           spk::array_view<const spk::ray_tracing_pipeline_create_info_nv> create_infos);
 )",
      R"(
+spk::pipeline
+device::create_ray_tracing_pipeline_nv(spk::pipeline_cache_ref pipeline_cache,
+                     const spk::ray_tracing_pipeline_create_info_nv& create_info) {
+  spk::pipeline_ref pipeline_ref;
+  dispatch_table().create_ray_tracing_pipelines_nv(handle_,pipeline_cache, 1, &create_info, allocation_callbacks_, &pipeline_ref);
+  return {pipeline_ref,*this,dispatch_table(),allocation_callbacks_};
+}
+
 inline std::vector<spk::pipeline>
 device::create_ray_tracing_pipelines_nv(spk::pipeline_cache_ref pipeline_cache,
                      spk::array_view<const spk::ray_tracing_pipeline_create_info_nv> create_infos) {
-std::vector<spk::pipeline_ref> pipeline_refs(create_infos.size());
-dispatch_table().create_ray_tracing_pipelines_nv(handle_,pipeline_cache, create_infos.size(), create_infos.data(), allocation_callbacks_, pipeline_refs.data());
-std::vector<spk::pipeline> pipelines;
-pipelines.reserve(create_infos.size());
-for (auto pipeline_ref : pipeline_refs)
-pipelines.emplace_back(pipeline_ref,*this,dispatch_table(),allocation_callbacks_);
-return pipelines;
+  std::vector<spk::pipeline_ref> pipeline_refs(create_infos.size());
+  dispatch_table().create_ray_tracing_pipelines_nv(handle_,pipeline_cache, create_infos.size(), create_infos.data(), allocation_callbacks_, pipeline_refs.data());
+  std::vector<spk::pipeline> pipelines;
+  pipelines.reserve(create_infos.size());
+  for (auto pipeline_ref : pipeline_refs)
+    pipelines.emplace_back(pipeline_ref,*this,dispatch_table(),allocation_callbacks_);
+  return pipelines;
 }
 )"},
     {"swapchain_khr", "get_swapchain_images_khr",

@@ -15,7 +15,7 @@ instance::instance(spk::instance_ref handle, const spk::loader& loader,
           load_instance_dispatch_table(loader.pvkGetInstanceProcAddr, handle_)),
       allocation_callbacks_(allocation_callbacks) {}
 
-device_dispatch_table load_device_dispatch_table(
+std::unique_ptr<device_dispatch_table> load_device_dispatch_table(
     spk::physical_device& physical_device, spk::device_ref device) {
   auto pvkGetDeviceProcAddr =
       (PFN_vkGetDeviceProcAddr)physical_device.dispatch_table()
@@ -45,19 +45,17 @@ loader::~loader() { SDL_Vulkan_UnloadLibrary(); }
 
 spk::version loader::instance_version() const {
   uint32_t v;
-  global_dispatch_table.enumerate_instance_version(&v);
+  dispatch_table().enumerate_instance_version(&v);
   return v;
 }
 
 std::vector<spk::layer_properties> loader::instance_layer_properties() const {
   uint32_t c;
-  CHECK_EQ(
-      global_dispatch_table.enumerate_instance_layer_properties(&c, nullptr),
-      spk::result::success);
+  CHECK_EQ(dispatch_table().enumerate_instance_layer_properties(&c, nullptr),
+           spk::result::success);
   std::vector<spk::layer_properties> v(c);
-  CHECK_EQ(
-      global_dispatch_table.enumerate_instance_layer_properties(&c, v.data()),
-      spk::result::success);
+  CHECK_EQ(dispatch_table().enumerate_instance_layer_properties(&c, v.data()),
+           spk::result::success);
   return v;
 }
 
@@ -74,53 +72,22 @@ std::vector<spk::extension_properties> loader::instance_extension_properties(
 std::vector<spk::extension_properties> loader::instance_extension_properties_(
     const char* layer_name) const {
   uint32_t c;
-  CHECK_EQ(global_dispatch_table.enumerate_instance_extension_properties(
+  CHECK_EQ(dispatch_table().enumerate_instance_extension_properties(
                layer_name, &c, nullptr),
            spk::result::success);
   std::vector<spk::extension_properties> v(c);
-  CHECK_EQ(global_dispatch_table.enumerate_instance_extension_properties(
+  CHECK_EQ(dispatch_table().enumerate_instance_extension_properties(
                layer_name, &c, v.data()),
            spk::result::success);
   return v;
 }
 
-spk::allocation_callbacks allocator;
-
-// typedef void* (VKAPI_PTR *PFN_vkAllocationFunction)(
-//    void*                                       pUserData,
-//    size_t                                      size,
-//    size_t                                      alignment,
-//    VkSystemAllocationScope                     allocationScope);
-//
-// typedef void* (VKAPI_PTR *PFN_vkReallocationFunction)(
-//    void*                                       pUserData,
-//    void*                                       pOriginal,
-//    size_t                                      size,
-//    size_t                                      alignment,
-//    VkSystemAllocationScope                     allocationScope);
-//
-// typedef void (VKAPI_PTR *PFN_vkFreeFunction)(
-//    void*                                       pUserData,
-//    void*                                       pMemory);
-//
-// typedef void (VKAPI_PTR *PFN_vkInternalAllocationNotification)(
-//    void*                                       pUserData,
-//    size_t                                      size,
-//    VkInternalAllocationType                    allocationType,
-//    VkSystemAllocationScope                     allocationScope);
-//
-// typedef void (VKAPI_PTR *PFN_vkInternalFreeNotification)(
-//    void*                                       pUserData,
-//    size_t                                      size,
-//    VkInternalAllocationType                    allocationType,
-//    VkSystemAllocationScope                     allocationScope);
-
 spk::instance loader::create_instance(
     spk::instance_create_info const& create_info,
     spk::allocation_callbacks const* allocation_callbacks) const {
   spk::instance_ref instance_ref;
-  global_dispatch_table.create_instance(&create_info, allocation_callbacks,
-                                        &instance_ref);
+  dispatch_table().create_instance(&create_info, allocation_callbacks,
+                                   &instance_ref);
 
   return {instance_ref, *this, allocation_callbacks};
 }

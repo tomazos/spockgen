@@ -3,10 +3,10 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "file",
     hdrs = [
-      "file.h",
+        "file.h",
     ],
     linkopts = [
-      "-lstdc++fs",
+        "-lstdc++fs",
     ],
 )
 
@@ -47,11 +47,11 @@ cc_library(
 
 cc_library(
     name = "terminate",
-    hdrs = [
-        "terminate.h",
-    ],
     srcs = [
         "terminate.cc",
+    ],
+    hdrs = [
+        "terminate.h",
     ],
     linkopts = [
         "-lbacktrace",

@@ -418,52 +418,60 @@ void write_header(const sps::Registry& registry) {
 
   h.println(R"(
 
-inline spk::global_dispatch_table load_global_dispatch_table(
+inline std::unique_ptr<spk::global_dispatch_table> load_global_dispatch_table(
     PFN_vkGetInstanceProcAddr pvkGetInstanceProcAddr) {
-  spk::global_dispatch_table global_dispatch_table;
+  auto global_dispatch_table = std::make_unique<spk::global_dispatch_table>();
+
   spk::visit_dispatch_table(
-      global_dispatch_table,
+      *global_dispatch_table,
       [pvkGetInstanceProcAddr](spk::global_dispatch_table& t, auto mf,
                                const char* name) {
         using PFN = strip_member_function_t<decltype(mf)>;
         (t.*mf) = (PFN)pvkGetInstanceProcAddr(VK_NULL_HANDLE, name);
       });
+
   return global_dispatch_table;
 }
 
-inline spk::instance_dispatch_table load_instance_dispatch_table(
+inline std::unique_ptr<spk::instance_dispatch_table> load_instance_dispatch_table(
     PFN_vkGetInstanceProcAddr pvkGetInstanceProcAddr,
     spk::instance_ref instance) {
-  spk::instance_dispatch_table instance_dispatch_table;
-  instance_dispatch_table.instance = instance;
+  auto instance_dispatch_table = std::make_unique<spk::instance_dispatch_table>();
+
+  instance_dispatch_table->instance = instance;
+
   spk::visit_dispatch_table(
-      instance_dispatch_table,
+      *instance_dispatch_table,
       [pvkGetInstanceProcAddr, instance](spk::instance_dispatch_table& t,
                                          auto mf, const char* name) {
         using PFN = spk::strip_member_function_t<decltype(mf)>;
         (t.*mf) = (PFN)pvkGetInstanceProcAddr(instance, name);
       });
+
   return instance_dispatch_table;
 }
 
-inline spk::device_dispatch_table load_device_dispatch_table(
+inline std::unique_ptr<spk::device_dispatch_table> load_device_dispatch_table(
     PFN_vkGetDeviceProcAddr pvkGetDeviceProcAddr, spk::device_ref device) {
-  spk::device_dispatch_table device_dispatch_table;
-  device_dispatch_table.device = device;
+  auto device_dispatch_table = std::make_unique<spk::device_dispatch_table>();
+
+  device_dispatch_table->device = device;
 
   spk::visit_dispatch_table(
-      device_dispatch_table,
+      *device_dispatch_table,
       [pvkGetDeviceProcAddr, device](spk::device_dispatch_table& t, auto mf,
                                      const char* name) {
         using PFN = spk::strip_member_function_t<decltype(mf)>;
         (t.*mf) = (PFN)pvkGetDeviceProcAddr(device, name);
       });
+
   return device_dispatch_table;
 }
 
 )");
 
-  static std::set<std::string> instance_handles = {"physical_device",
+  static std::set<std::string> instance_handles = {"instance",
+                                                   "physical_device",
                                                    "debug_report_callback_ext",
                                                    "debug_utils_messenger_ext",
                                                    "display_mode_khr",
@@ -488,9 +496,6 @@ inline spk::device_dispatch_table load_device_dispatch_table(
     std::string vname = handle->handle->name;
 
     h.println("class ", sname, " ");
-    if (sname == "instance" || sname == "device") {
-      h.print(": spk::nomove ");
-    }
     h.println("{");
 
     h.println(" public:");
@@ -521,17 +526,15 @@ inline spk::device_dispatch_table load_device_dispatch_table(
       h.println("  , dispatch_table_(&dispatch_table)");
       h.println("  , allocation_callbacks_(allocation_callbacks) {}");
     }
-    if (sname != "instance" || sname != "device") {
-      h.println("  ", sname, "(const ", sname, "&) = delete;");
-      h.println("  ", sname, "(", sname, "&& that)");
-      h.println("  : handle_(that.handle_)");
-      if (handle->parent) h.println("  , parent_(that.parent_)");
-      h.println("  , dispatch_table_(that.dispatch_table_)");
-      h.println(
-          "  , allocation_callbacks_(that.allocation_callbacks_) { "
-          "that.handle_ "
-          "= VK_NULL_HANDLE; }");
-    }
+    h.println("  ", sname, "(const ", sname, "&) = delete;");
+    h.println("  ", sname, "(", sname, "&& that)");
+    h.println("  : handle_(that.handle_)");
+    if (handle->parent) h.println("  , parent_(that.parent_)");
+    h.println("  , dispatch_table_(std::move(that.dispatch_table_))");
+    h.println(
+        "  , allocation_callbacks_(std::move(that.allocation_callbacks_)) { "
+        "that.handle_ "
+        "= VK_NULL_HANDLE; }");
     h.println();
     h.println("void release() { handle_ = VK_NULL_HANDLE; }");
     h.println();
@@ -589,26 +592,19 @@ inline spk::device_dispatch_table load_device_dispatch_table(
     }
 
     h.println();
-    if (sname == "instance")
-      h.println(
-          "  const instance_dispatch_table& dispatch_table() { return "
-          "dispatch_table_; }");
-    else if (instance_handles.count(sname))
+    if (instance_handles.count(sname))
       h.println(
           "  const instance_dispatch_table& dispatch_table() { return "
           "*dispatch_table_; }");
-    else if (sname == "device")
-      h.println(
-          "  const device_dispatch_table& dispatch_table() { return "
-          "dispatch_table_; }");
     else
       h.println(
           "  const device_dispatch_table& dispatch_table() { return "
           "*dispatch_table_; }");
 
     if (handle->destructor) {
-      h.print("  ~", sname, "() { dispatch_table().", handle->destructor->name,
-              "(");
+      h.print("  ~", sname,
+              "() { if (handle_ != VK_NULL_HANDLE) dispatch_table().",
+              handle->destructor->name, "(");
       if (handle->destructor_parent)
         h.print("parent_, handle_, allocation_callbacks_);");
       else
@@ -621,16 +617,18 @@ inline spk::device_dispatch_table load_device_dispatch_table(
     if (handle->parent)
       h.println("  ", handle->parent->name, " parent_ = VK_NULL_HANDLE;");
     if (sname == "instance")
-      h.println("  const instance_dispatch_table dispatch_table_;");
+      h.println(
+          "  std::unique_ptr<const instance_dispatch_table> dispatch_table_;");
     else if (instance_handles.count(sname))
       h.println("  const instance_dispatch_table* dispatch_table_;");
     else if (sname == "device")
-      h.println("  const device_dispatch_table dispatch_table_;");
+      h.println(
+          "  std::unique_ptr<const device_dispatch_table> dispatch_table_;");
     else
       h.println("  const device_dispatch_table* dispatch_table_;");
     h.println(
         "  const spk::allocation_callbacks* allocation_callbacks_ = nullptr;");
-    if (sname == "physical_device") h.println("\n  friend class device;");
+    //    if (sname == "physical_device") h.println("\n  friend class device;");
     h.println("};");
     for (const auto& alias : handle->aliases) {
       h.println("using ", alias, " = ", handle->name, ";");

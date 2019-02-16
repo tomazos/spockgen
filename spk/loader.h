@@ -97,14 +97,14 @@ class loader {
       spk::allocation_callbacks const* allocator = nullptr) const;
 
   const spk::global_dispatch_table& dispatch_table() const {
-    return global_dispatch_table;
+    return *global_dispatch_table;
   }
 
  private:
   std::vector<spk::extension_properties> instance_extension_properties_(
       const char* layer_name) const;
 
-  spk::global_dispatch_table global_dispatch_table;
+  std::unique_ptr<spk::global_dispatch_table> global_dispatch_table;
 };
 
 }  // namespace spk
