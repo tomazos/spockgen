@@ -31,9 +31,9 @@ class file_reader {
   std::ifstream ifs;
 };
 
-struct append_t {
+constexpr struct append_t {
 } append;
-struct truncate_t {
+constexpr struct truncate_t {
 } truncate;
 
 class file_writer {

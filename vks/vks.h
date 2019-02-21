@@ -128,10 +128,10 @@ struct Enumeration : Entity {
 
 struct Bitmask : Entity {
   std::string zeroinit() const override { return "= " + name + "(0)"; }
-  const Enumeration* requires = nullptr;
+  const Enumeration* requires_ = nullptr;
   const Platform* platform = nullptr;
   bool is_empty_enum() const override {
-    return requires == nullptr || requires->is_empty_enum();
+    return requires_ == nullptr || requires_->is_empty_enum();
   }
 };
 

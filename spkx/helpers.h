@@ -2,19 +2,25 @@
 
 #include <filesystem>
 
-#include "dvc/file.h"
 #include "spk/spock.h"
+#include "spkx/presenter.h"
 
 namespace spkx {
 
 spk::shader_module create_shader(spk::device& device,
-                                 const std::filesystem::path& path) {
-  CHECK(exists(path)) << "file not found: " << path;
-  std::string code = dvc::load_file(path);
-  spk::shader_module_create_info create_info;
-  create_info.set_code_size(code.size());
-  create_info.set_p_code((uint32_t*)code.data());
-  return device.create_shader_module(create_info);
-}
+                                 const std::filesystem::path& path);
+
+struct pipeline_config {
+  std::filesystem::path vertex_shader;
+  std::vector<spk::vertex_input_binding_description>
+      vertex_binding_descriptions;
+  std::vector<spk::vertex_input_attribute_description>
+      vertex_attribute_descriptions;
+  std::filesystem::path fragment_shader;
+  spk::primitive_topology topology;
+};
+
+spk::pipeline create_pipeline(spk::device& device, spkx::presenter& presenter,
+                              const pipeline_config& pipeline_config);
 
 }  // namespace spkx

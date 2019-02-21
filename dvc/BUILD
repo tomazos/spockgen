@@ -46,6 +46,13 @@ cc_library(
 )
 
 cc_library(
+    name = "time",
+    hdrs = [
+        "time.h",
+    ],
+)
+
+cc_library(
     name = "terminate",
     srcs = [
         "terminate.cc",

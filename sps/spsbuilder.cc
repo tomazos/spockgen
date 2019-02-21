@@ -263,10 +263,10 @@ void build_enum(sps::Registry& sreg, const vks::Registry& vreg) {
     sps::Bitmask* bitmask = new sps::Bitmask;
     bitmask->name = translate_bitmask_name(name);
     bitmask->bitmask = vbitmask;
-    if (vbitmask->requires) {
-      dvc::insert_or_die(sreg.flag_bits_map, vbitmask->requires, bitmask);
+    if (vbitmask->requires_) {
+      dvc::insert_or_die(sreg.flag_bits_map, vbitmask->requires_, bitmask);
       sps::Enumeration* enumeration =
-          convert_enumeration(name, vbitmask->requires);
+          convert_enumeration(name, vbitmask->requires_);
       for (sps::Enumerator enumerator : enumeration->enumerators) {
         size_t bitpos = enumerator.name.rfind("_bit");
         if (bitpos != std::string::npos)

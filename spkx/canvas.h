@@ -4,12 +4,12 @@
 
 namespace spkx {
 
-class frame {
+class canvas {
  public:
-  frame(spk::image image, spk::device& device, spk::render_pass& render_pass,
-        spk::format format, spk::extent_2d extent);
-  frame(frame&&) = default;
-  ~frame();
+  canvas(spk::image image, spk::device& device, spk::render_pass& render_pass,
+         spk::format format, spk::extent_2d extent);
+  canvas(canvas&&) = default;
+  ~canvas();
 
   spk::framebuffer& framebuffer() { return framebuffer_; }
 

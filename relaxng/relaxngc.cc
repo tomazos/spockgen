@@ -855,6 +855,7 @@ void generate_relaxng_parser(const std::filesystem::path& schema_file,
     for (const auto& [attribute, disposition] : md.attributes) {
       std::string name = attribute;
       if (md.elements.count(name)) name += "_attribute";
+      if (name == "requires") name = "requires_";
       std::string type = "std::string";
       StructDesign::Member member;
       member.type = apply_disposition(type, disposition);

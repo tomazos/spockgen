@@ -1,5 +1,4 @@
-#include "spkx/frame.h"
-
+#include "spkx/canvas.h"
 #include "spk/spock.h"
 
 namespace {
@@ -44,14 +43,14 @@ spk::framebuffer create_framebuffer(spk::device& device,
 
 namespace spkx {
 
-frame::frame(spk::image image, spk::device& device,
-             spk::render_pass& render_pass, spk::format format,
-             spk::extent_2d extent)
+canvas::canvas(spk::image image, spk::device& device,
+               spk::render_pass& render_pass, spk::format format,
+               spk::extent_2d extent)
     : image_(std::move(image)),
       image_view_(create_image_view(device, image_, format)),
       framebuffer_(
           create_framebuffer(device, render_pass, image_view_, extent)) {}
 
-frame::~frame() { image_.release(); }
+canvas::~canvas() { image_.release(); }
 
 }  // namespace spkx

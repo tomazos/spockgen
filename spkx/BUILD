@@ -3,21 +3,27 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "spkx",
     srcs = [
-        "frame.cc",
+        "canvas.cc",
+        "game.cc",
+        "helpers.cc",
+        "presenter.cc",
         "program.cc",
-        "swapchain.cc",
+        "rendering.cc",
     ],
     hdrs = [
-        "frame.h",
+        "canvas.h",
+        "game.h",
         "helpers.h",
+        "presenter.h",
         "program.h",
-        "swapchain.h",
+        "rendering.h",
     ],
     linkopts = [
         "-lglog",
         "-lgflags",
     ],
     deps = [
+        "//dvc:file",
         "//dvc:terminate",
         "//spk:spock",
     ],

@@ -44,9 +44,9 @@ void write_test(const vks::Registry& registry) {
   for (const auto& [name, bitmask] : registry.bitmasks) {
     if (bitmask->platform) test.println("#ifdef ", bitmask->platform->protect);
     test.println("VKXMLTEST_CHECK_BITMASK(", name, ");");
-    if (bitmask->requires)
+    if (bitmask->requires_)
       test.println("VKXMLTEST_CHECK_BITMASK_REQUIRES(", name, ", ",
-                   bitmask->requires->name, ");");
+                   bitmask->requires_->name, ");");
     if (bitmask->platform) test.println("#endif");
   }
 

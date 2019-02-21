@@ -290,4 +290,43 @@ program::program(int argc, char** argv)
 
 glm::ivec2 program::window_size() { return get_window_size(window_.get()); }
 
+void program::run() {
+  while (!shutdown_) {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+      handle_event(event);
+      if (shutdown_) goto end_program;
+    }
+
+    work();
+  }
+end_program:
+  graphics_queue_.wait_idle();
+  present_queue_.wait_idle();
+  device_.wait_idle();
+}
+
+void program::handle_event(const SDL_Event& event) {
+  switch (event.type) {
+    case SDL_QUIT:
+      quit(event.quit);
+      return;
+    case SDL_KEYDOWN:
+      key_down(event.key);
+      return;
+    case SDL_KEYUP:
+      key_up(event.key);
+      return;
+    case SDL_MOUSEBUTTONDOWN:
+      mouse_button_down(event.button);
+      break;
+    case SDL_MOUSEBUTTONUP:
+      mouse_button_up(event.button);
+      break;
+    case SDL_MOUSEMOTION:
+      mouse_motion(event.motion);
+      break;
+  }
+}
+
 }  // namespace spkx

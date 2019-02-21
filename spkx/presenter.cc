@@ -1,5 +1,4 @@
-#include "spkx/swapchain.h"
-
+#include "presenter.h"
 #include <SDL2/SDL_vulkan.h>
 #include <algorithm>
 
@@ -124,26 +123,27 @@ spk::render_pass create_render_pass(spk ::device& device, spk::format format) {
   return device.create_render_pass(render_pass_create_info);
 }
 
-std::vector<spkx::frame> create_frames(spk::device& device,
-                                       spk::swapchain_khr& swapchain,
-                                       spk::render_pass& render_pass,
-                                       spk::format format,
-                                       spk::extent_2d extent) {
-  std::vector<spkx::frame> frames;
+std::vector<spkx::canvas> create_canvases(spk::device& device,
+                                          spk::swapchain_khr& swapchain,
+                                          spk::render_pass& render_pass,
+                                          spk::format format,
+                                          spk::extent_2d extent) {
+  std::vector<spkx::canvas> canvases;
 
   std::vector<spk::image> images = swapchain.images_khr();
 
   for (spk::image& image : images)
-    frames.emplace_back(std::move(image), device, render_pass, format, extent);
+    canvases.emplace_back(std::move(image), device, render_pass, format,
+                          extent);
 
-  return std::move(frames);
+  return std::move(canvases);
 }
 
 }  // namespace
 
 namespace spkx {
 
-swapchain::swapchain(spk::physical_device& physical_device, SDL_Window* window,
+presenter::presenter(spk::physical_device& physical_device, SDL_Window* window,
                      spk::surface_khr& surface, spk::device& device)
     : surface_capabilities_(physical_device.surface_capabilities_khr(surface)),
       surface_format_(select_surface_format(
@@ -153,7 +153,7 @@ swapchain::swapchain(spk::physical_device& physical_device, SDL_Window* window,
       swapchain_(create_swapchain(surface, device, surface_capabilities_,
                                   surface_format_, extent_, num_images_)),
       render_pass_(create_render_pass(device, surface_format_.format())),
-      frames_(create_frames(device, swapchain_, render_pass_,
-                            surface_format_.format(), extent_)) {}
+      canvases_(create_canvases(device, swapchain_, render_pass_,
+                                surface_format_.format(), extent_)) {}
 
 }  // namespace spkx

@@ -3,20 +3,20 @@
 #include <SDL2/SDL.h>
 
 #include "spk/spock.h"
-
-#include "spkx/frame.h"
+#include "spkx/canvas.h"
 
 namespace spkx {
 
-class swapchain {
+class presenter {
  public:
-  swapchain(spk::physical_device& physical_device, SDL_Window* window,
+  presenter(spk::physical_device& physical_device, SDL_Window* window,
             spk::surface_khr& surface, spk::device& device);
 
   spk::extent_2d extent() { return extent_; }
   spk::render_pass& render_pass() { return render_pass_; }
-  std::vector<frame>& frames() { return frames_; }
-  spk::swapchain_khr& get() { return swapchain_; }
+  std::vector<canvas>& canvases() { return canvases_; }
+  spk::swapchain_khr& swapchain() { return swapchain_; }
+  size_t num_images() { return num_images_; }
 
  private:
   spk::surface_capabilities_khr surface_capabilities_;
@@ -25,7 +25,7 @@ class swapchain {
   uint32_t num_images_;
   spk::swapchain_khr swapchain_;
   spk::render_pass render_pass_;
-  std::vector<frame> frames_;
+  std::vector<canvas> canvases_;
 };
 
 }  // namespace spkx

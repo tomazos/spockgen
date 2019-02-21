@@ -199,9 +199,9 @@ void parse_bitmasks(vks::Registry& registry, const vkr::start& start) {
       if (type.alias) continue;
       auto bitmask = new vks::Bitmask;
       bitmask->name = name;
-      bitmask->requires =
-          (type.requires ? registry.enumerations.at(type.requires.value())
-                         : nullptr);
+      bitmask->requires_ =
+          (type.requires_ ? registry.enumerations.at(type.requires_.value())
+                          : nullptr);
 
       dvc::insert_or_die(registry.bitmasks, name, bitmask);
     }
