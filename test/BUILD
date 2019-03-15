@@ -88,7 +88,6 @@ cc_binary(
         "skyfly.cc",
     ],
     data = [
-        "eso0932a.png",
         "skyfly.frag.spv",
         "skyfly.vert.spv",
     ],
