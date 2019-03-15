@@ -1,6 +1,24 @@
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
+    name = "program",
+    srcs = [
+        "program.cc",
+    ],
+    hdrs = [
+        "program.h",
+    ],
+    linkopts = [
+        "-lglog",
+        "-lgflags",
+        "-ldl",
+    ],
+    deps = [
+        ":terminate",
+    ],
+)
+
+cc_library(
     name = "file",
     hdrs = [
         "file.h",

@@ -18,6 +18,7 @@ struct pipeline_config {
       vertex_attribute_descriptions;
   std::filesystem::path fragment_shader;
   spk::primitive_topology topology;
+  spk::pipeline_layout_ref layout = VK_NULL_HANDLE;
 };
 
 spk::pipeline create_pipeline(spk::device& device, spkx::presenter& presenter,

@@ -23,9 +23,28 @@ class file_reader {
 
   void read(void* buf, size_t n) { ifs.read((char*)buf, n); }
 
+  template <typename T>
+  T rread() {
+    T t;
+    read(&t, sizeof(T));
+    return t;
+  }
+
+  size_t vread() {
+    size_t s = 0;
+    for (int i = 0; true; i += 7) {
+      uint8_t x = rread<uint8_t>();
+      s |= size_t(x & 127u) << i;
+      if (!(x & 128u)) break;
+    }
+    return s;
+  }
+
   void seek(size_t pos) { ifs.seekg(pos); }
 
   size_t tell() { return ifs.tellg(); }
+
+  std::ifstream& istream() { return ifs; }
 
  private:
   std::ifstream ifs;
@@ -44,6 +63,22 @@ class file_writer {
   file_writer(const std::filesystem::path& fspath, truncate_t) {
     open(fspath, std::ios::trunc | std::ios::binary);
   }
+
+  size_t tell() { return ofs.tellp(); }
+  void seek(size_t pos) { ofs.seekp(pos, std::ios_base::beg); }
+
+  template <typename T>
+  void rwrite(T t) {
+    write(&t, sizeof(T));
+  }
+  void vwrite(size_t s) {
+    while (s > 127) {
+      rwrite<uint8_t>((s & 127u) | 128u);
+      s >>= 7;
+    }
+    rwrite<uint8_t>(s);
+  }
+
   void write(const void* buf, size_t n) { ofs.write((const char*)buf, n); }
   void write(std::string_view sv) { write(sv.data(), sv.size()); }
   template <typename... Args>

@@ -1,5 +1,7 @@
 #include "spkx/helpers.h"
 
+#include <optional>
+
 #include "dvc/file.h"
 
 namespace spkx {
@@ -79,10 +81,15 @@ spk::pipeline create_pipeline(spk::device& device, spkx::presenter& presenter,
   spk::pipeline_color_blend_state_create_info color_blend;
   color_blend.set_attachments({&color_blend_attachement, 1});
 
-  spk::pipeline_layout_create_info pipeline_layout_create_info;
-
-  spk::pipeline_layout pipeline_layout =
-      device.create_pipeline_layout(pipeline_layout_create_info);
+  std::optional<spk::pipeline_layout> pipeline_layout;
+  spk::pipeline_layout_ref pipeline_layout_ref;
+  if (config.layout != VK_NULL_HANDLE)
+    pipeline_layout_ref = config.layout;
+  else {
+    pipeline_layout.emplace(
+        device.create_pipeline_layout(spk::pipeline_layout_create_info{}));
+    pipeline_layout_ref = *pipeline_layout;
+  }
 
   spk::graphics_pipeline_create_info pipeline_info;
   pipeline_info.set_stages({pipeline_shader_stage_create_infos, 2});
@@ -91,7 +98,7 @@ spk::pipeline create_pipeline(spk::device& device, spkx::presenter& presenter,
   pipeline_info.set_p_viewport_state(&viewport_state);
   pipeline_info.set_p_rasterization_state(&rasterizer);
   pipeline_info.set_p_color_blend_state(&color_blend);
-  pipeline_info.set_layout(pipeline_layout);
+  pipeline_info.set_layout(pipeline_layout_ref);
   pipeline_info.set_render_pass(presenter.render_pass());
   pipeline_info.set_subpass(0);
   pipeline_info.set_p_multisample_state(&multisampling);

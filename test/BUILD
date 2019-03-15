@@ -1,5 +1,39 @@
 load("//:glsl.bzl", "glsl_shader")
 
+cc_binary(
+    name = "fonttest",
+    srcs = [
+        "fonttest.cc",
+    ],
+    linkopts = [
+        "-lpng",
+    ],
+    deps = [
+        "//dvc:program",
+        "//ft",
+    ],
+)
+
+cc_binary(
+    name = "ranwalkthing",
+    srcs = [
+        "ranwalkthing.cc",
+    ],
+    deps = [
+        "//makeimage",
+    ],
+)
+
+#cc_binary(
+#    name = "starfield",
+#    srcs = [
+#        "starfield.cc",
+#    ],
+#    deps = [
+#        "//makeimage",
+#    ],
+#)
+
 genrule(
     name = "vkxmltest_generate",
     srcs = [
@@ -36,6 +70,39 @@ glsl_shader(
 glsl_shader(
     name = "pointtest_frag",
     src = "pointtest.frag",
+)
+
+glsl_shader(
+    name = "skyfly_vert",
+    src = "skyfly.vert",
+)
+
+glsl_shader(
+    name = "skyfly_frag",
+    src = "skyfly.frag",
+)
+
+cc_binary(
+    name = "skyfly",
+    srcs = [
+        "skyfly.cc",
+    ],
+    data = [
+        "eso0932a.png",
+        "skyfly.frag.spv",
+        "skyfly.vert.spv",
+    ],
+    linkopts = [
+        "-lglog",
+        "-lgflags",
+        "-lpng",
+    ],
+    deps = [
+        "//dvc:file",
+        "//dvc:terminate",
+        "//spk:spock",
+        "//spkx",
+    ],
 )
 
 cc_binary(
