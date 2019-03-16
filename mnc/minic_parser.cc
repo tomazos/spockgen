@@ -73,7 +73,7 @@ std::string_view token_kind_to_string(Token::Kind kind) {
       return "SEMICOLON";
   }
 
-  LOG(FATAL) << "unknown token::kind";
+  DVC_FATAL("unknown token::kind");
 }
 
 std::ostream& operator<<(std::ostream& o, const Token& tok) {
@@ -155,8 +155,8 @@ struct CScanner : dvc::scanner {
       }
     }
 
-    LOG(ERROR) << "While parsing " << get_data();
-    LOG(FATAL) << "Unexpected character: " << c << " at line " << l;
+    DVC_ERROR("While parsing ", get_data());
+    DVC_FATAL("Unexpected character: ", c, " at line ", l);
   }
 };
 
@@ -166,7 +166,7 @@ class CParser : public dvc::parser<Token> {
 
   Declaration parse_declaration_end() {
     Declaration decl = parse_declaration();
-    CHECK(peek() == Token::END);
+    DVC_ASSERT(peek() == Token::END);
     return decl;
   }
 
@@ -177,19 +177,19 @@ class CParser : public dvc::parser<Token> {
       switch (peek().kind) {
         case Token::STRUCT:
           incr();
-          CHECK(peek() == Token::IDENTIFIER);
+          DVC_ASSERT(peek() == Token::IDENTIFIER);
           [[fallthrough]];
         case Token::IDENTIFIER:
           if (root) goto done_specifiers;
           root = pop().spelling;
           break;
         case Token::CONST:
-          CHECK(!const_);
+          DVC_ASSERT(!const_);
           const_ = true;
           incr();
           break;
         default:
-          CHECK(root) << "unexpected token: " << peek();
+          DVC_ASSERT(root, "unexpected token: ", peek());
           goto done_specifiers;
       }
     }
@@ -208,19 +208,19 @@ class CParser : public dvc::parser<Token> {
       }
     }
 
-    CHECK(peek() == Token::IDENTIFIER);
+    DVC_ASSERT(peek() == Token::IDENTIFIER);
     std::string name = pop().spelling;
 
     if (peek() == Token::LBRACK) {
       incr();
       Expr* e;
-      CHECK(peek() == Token::IDENTIFIER || peek() == Token::NUMBER);
+      DVC_ASSERT(peek() == Token::IDENTIFIER || peek() == Token::NUMBER);
       if (peek() == Token::IDENTIFIER) {
         e = new Reference(pop().spelling);
       } else {
         e = new Number(pop().spelling);
       }
-      CHECK(pop() == Token::RBRACK);
+      DVC_ASSERT(pop() == Token::RBRACK);
       t = new Array(t, e);
     }
 
@@ -229,8 +229,8 @@ class CParser : public dvc::parser<Token> {
 
   FunctionPrototype parse_function_prototype() {
     FunctionPrototype function_prototype;
-    CHECK(pop().spelling == "typedef");
-    CHECK(peek() == Token::IDENTIFIER);
+    DVC_ASSERT(pop().spelling == "typedef");
+    DVC_ASSERT(peek() == Token::IDENTIFIER);
     Type* t = new Name(pop().spelling);
     if (peek() == Token::ASTERISK) {
       t = new Pointer(t);
@@ -239,14 +239,14 @@ class CParser : public dvc::parser<Token> {
 
     function_prototype.return_type = t;
 
-    CHECK(pop() == Token::LPAREN);
-    CHECK(peek() == Token::IDENTIFIER);
-    CHECK(pop().spelling == "VKAPI_PTR");
-    CHECK(pop() == Token::ASTERISK);
-    CHECK(peek() == Token::IDENTIFIER);
+    DVC_ASSERT(pop() == Token::LPAREN);
+    DVC_ASSERT(peek() == Token::IDENTIFIER);
+    DVC_ASSERT(pop().spelling == "VKAPI_PTR");
+    DVC_ASSERT(pop() == Token::ASTERISK);
+    DVC_ASSERT(peek() == Token::IDENTIFIER);
     function_prototype.name = pop().spelling;
-    CHECK(pop() == Token::RPAREN);
-    CHECK(pop() == Token::LPAREN);
+    DVC_ASSERT(pop() == Token::RPAREN);
+    DVC_ASSERT(pop() == Token::LPAREN);
     if (peek() == Token::IDENTIFIER && peek(1) == Token::RPAREN) {
       incr(2);
       return function_prototype;
@@ -258,7 +258,7 @@ class CParser : public dvc::parser<Token> {
         incr();
         goto parse_another_param;
       default:
-        LOG(FATAL) << peek();
+        DVC_FATAL(peek());
       case Token::RPAREN:
         incr();
         [[fallthrough]];

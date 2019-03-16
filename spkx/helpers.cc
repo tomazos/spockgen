@@ -3,12 +3,13 @@
 #include <optional>
 
 #include "dvc/file.h"
+#include "dvc/log.h"
 
 namespace spkx {
 
 spk::shader_module create_shader(spk::device& device,
                                  const std::filesystem::path& path) {
-  CHECK(exists(path)) << "file not found: " << path;
+  DVC_ASSERT(exists(path), "file not found: ", path);
   std::string code = dvc::load_file(path);
   spk::shader_module_create_info create_info;
   create_info.set_code_size(code.size());

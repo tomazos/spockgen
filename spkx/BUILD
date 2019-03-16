@@ -21,7 +21,6 @@ cc_library(
         "rendering.h",
     ],
     linkopts = [
-        "-lglog",
         "-lgflags",
     ],
     deps = [

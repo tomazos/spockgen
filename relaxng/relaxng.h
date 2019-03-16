@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 
-#include <glog/logging.h>
 #include <tinyxml2.h>
 
 #include "dvc/json.h"
@@ -60,7 +59,7 @@ void apply_attribute(Class& object, Attribute attribute,
                      std::index_sequence<I...>) {
   bool found = false;
   (apply_attribute_i<Class, I>(object, attribute, found), ...);
-  CHECK(found) << attribute->Name() << " line " << attribute->GetLineNum();
+  DVC_ASSERT(found, attribute->Name(), " line ", attribute->GetLineNum());
 }
 
 template <typename T>
@@ -105,14 +104,14 @@ void apply_subelement_i(Class& object, Element subelement) {
         using rd = remove_disposition<T>;
         using SubelementClass = typename rd::type;
         if constexpr (rd::disposition == MemberDisposition::REQUIRED) {
-          CHECK(!(object.*m::member_ptr)._parsed_)
-              << "required member already present " << subelement->Name()
-              << " line " << subelement->GetLineNum();
+          DVC_ASSERT(!(object.*m::member_ptr)._parsed_,
+                     "required member already present ", subelement->Name(),
+                     " line ", subelement->GetLineNum());
           object.*m::member_ptr = parse<SubelementClass>(subelement);
         } else if constexpr (rd::disposition == MemberDisposition::OPTIONAL) {
-          CHECK(!(object.*m::member_ptr))
-              << "optional member already present " << subelement->Name()
-              << " line " << subelement->GetLineNum();
+          DVC_ASSERT(!(object.*m::member_ptr),
+                     "optional member already present ", subelement->Name(),
+                     " line ", subelement->GetLineNum());
           object.*m::member_ptr = parse<SubelementClass>(subelement);
         } else if constexpr (rd::disposition == MemberDisposition::MULTIPLE) {
           (object.*m::member_ptr).push_back(parse<SubelementClass>(subelement));

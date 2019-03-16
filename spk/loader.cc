@@ -1,10 +1,10 @@
 #include "loader.h"
 
+#include <SDL2/SDL_vulkan.h>
 #include <dlfcn.h>
-#include <glog/logging.h>
 #include <memory>
 
-#include <SDL2/SDL_vulkan.h>
+#include "dvc/log.h"
 
 namespace spk {
 
@@ -31,12 +31,12 @@ device::device(spk::device_ref handle, spk::physical_device& physical_device,
       allocation_callbacks_(allocation_callbacks) {}
 
 loader::loader(const char* path) {
-  if (SDL_Vulkan_LoadLibrary(path) != 0) LOG(FATAL) << SDL_GetError();
+  if (SDL_Vulkan_LoadLibrary(path) != 0) DVC_FATAL(SDL_GetError());
 
   pvkGetInstanceProcAddr =
       (PFN_vkGetInstanceProcAddr)SDL_Vulkan_GetVkGetInstanceProcAddr();
 
-  CHECK(pvkGetInstanceProcAddr);
+  DVC_ASSERT(pvkGetInstanceProcAddr);
 
   global_dispatch_table = load_global_dispatch_table(pvkGetInstanceProcAddr);
 }
@@ -51,11 +51,13 @@ spk::version loader::instance_version() const {
 
 std::vector<spk::layer_properties> loader::instance_layer_properties() const {
   uint32_t c;
-  CHECK_EQ(dispatch_table().enumerate_instance_layer_properties(&c, nullptr),
-           spk::result::success);
+  DVC_ASSERT_EQ(
+      dispatch_table().enumerate_instance_layer_properties(&c, nullptr),
+      spk::result::success);
   std::vector<spk::layer_properties> v(c);
-  CHECK_EQ(dispatch_table().enumerate_instance_layer_properties(&c, v.data()),
-           spk::result::success);
+  DVC_ASSERT_EQ(
+      dispatch_table().enumerate_instance_layer_properties(&c, v.data()),
+      spk::result::success);
   return v;
 }
 
@@ -72,13 +74,13 @@ std::vector<spk::extension_properties> loader::instance_extension_properties(
 std::vector<spk::extension_properties> loader::instance_extension_properties_(
     const char* layer_name) const {
   uint32_t c;
-  CHECK_EQ(dispatch_table().enumerate_instance_extension_properties(
-               layer_name, &c, nullptr),
-           spk::result::success);
+  DVC_ASSERT_EQ(dispatch_table().enumerate_instance_extension_properties(
+                    layer_name, &c, nullptr),
+                spk::result::success);
   std::vector<spk::extension_properties> v(c);
-  CHECK_EQ(dispatch_table().enumerate_instance_extension_properties(
-               layer_name, &c, v.data()),
-           spk::result::success);
+  DVC_ASSERT_EQ(dispatch_table().enumerate_instance_extension_properties(
+                    layer_name, &c, v.data()),
+                spk::result::success);
   return v;
 }
 

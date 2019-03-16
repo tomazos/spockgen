@@ -10,12 +10,12 @@ cc_library(
     ],
     linkopts = [
         "-lstdc++fs",
-        "-lglog",
         "-lgflags",
         "-lpng",
         "-ldl",
     ],
     deps = [
+        "//dvc:log",
         "//dvc:terminate",
     ],
 )

@@ -1,5 +1,6 @@
 #include "spkx/rendering.h"
 
+#include "dvc/log.h"
 #include "spk/spock.h"
 
 namespace {
@@ -58,8 +59,8 @@ rendering::rendering(spk::device& device, uint32_t graphics_queue_family)
     case spk::result::timeout:
       return false;
     default:
-      LOG(FATAL) << "unexpected result " << wait_for_fences_result
-                 << " from wait_for_fences";
+      DVC_FATAL("unexpected result ", wait_for_fences_result,
+                " from wait_for_fences");
   }
 
   spk::result acquire_next_image_result = swapchain.acquire_next_image_khr(
@@ -71,8 +72,7 @@ rendering::rendering(spk::device& device, uint32_t graphics_queue_family)
     case spk::result::not_ready:
       return false;
     default:
-      LOG(FATAL) << "acquire_next_image_khr returned "
-                 << acquire_next_image_result;
+      DVC_FATAL("acquire_next_image_khr returned ", acquire_next_image_result);
   }
 
   device.reset_fences({&fence, 1});

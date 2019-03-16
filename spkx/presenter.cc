@@ -2,6 +2,8 @@
 #include <SDL2/SDL_vulkan.h>
 #include <algorithm>
 
+#include "dvc/log.h"
+
 namespace {
 
 spk::surface_format_khr select_surface_format(
@@ -23,7 +25,7 @@ spk::surface_format_khr select_surface_format(
       return format;
   }
 
-  LOG(FATAL) << "TODO: no good format";
+  DVC_FATAL("TODO: no good format");
 }
 
 bool swapchain_determines_extent(spk::extent_2d extent) {

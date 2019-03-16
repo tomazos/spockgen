@@ -1,8 +1,9 @@
 #pragma once
 
-#include <glog/logging.h>
 #include <glm/glm.hpp>
 #include <png++/png.hpp>
+
+#include "dvc/log.h"
 
 class ImageMaker {
  public:
@@ -12,7 +13,7 @@ class ImageMaker {
   template <typename F>
   void render(glm::vec2 topleft, glm::vec2 extent, F f) {
     const glm::ivec2 image_extent{width, height};
-    CHECK_GT(multisample, 0);
+    DVC_ASSERT_GT(multisample, 0);
 
     png::image<png::rgba_pixel> image(image_extent.x, image_extent.y);
 

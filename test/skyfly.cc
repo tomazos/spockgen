@@ -3,7 +3,6 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
 #include <gflags/gflags.h>
-#include <glog/logging.h>
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -17,6 +16,7 @@
 
 #include <iostream>
 #include "dvc/file.h"
+#include "dvc/log.h"
 #include "dvc/terminate.h"
 #include "spk/loader.h"
 #include "spk/spock.h"
@@ -163,12 +163,12 @@ struct World {
 
   void go_forward() { player.dir += 1; }
   void go_backward() { player.dir -= 0.2; }
-  void go_left() { LOG(ERROR) << "go_left"; }
-  void go_right() { LOG(ERROR) << "go_right"; }
+  void go_left() { DVC_LOG("go_left"); }
+  void go_right() { DVC_LOG("go_right"); }
   void stop_forward() { player.dir -= 1; }
   void stop_backward() { player.dir += 0.2; }
-  void stop_left() { LOG(ERROR) << "stop_left"; }
-  void stop_right() { LOG(ERROR) << "stop_right"; }
+  void stop_left() { DVC_LOG("stop_left"); }
+  void stop_right() { DVC_LOG("stop_right"); }
 
   std::normal_distribution<float> normal_;
   std::mt19937 rng;
@@ -236,7 +236,7 @@ UniformBuffer create_uniform_buffer(spk::physical_device& physical_device,
       spk::memory_property_flags::host_visible |
           spk::memory_property_flags::host_coherent);
   spk::device_memory device_memory = spkx::create_memory(
-      device, sizeof(UniformBufferObject), memory_type_index);
+      device, memory_requirements.size(), memory_type_index);
   buffer.bind_memory(device_memory, 0);
 
   return {std::move(buffer), std::move(device_memory),
@@ -363,8 +363,8 @@ struct SkyFly : spkx::game {
         descriptor_sets(create_descriptor_sets(device(), descriptor_pool,
                                                descriptor_set_layout,
                                                num_renderings())) {
-    CHECK_EQ(uniform_buffers.size(), descriptor_sets.size());
-    CHECK_EQ(uniform_buffers.size(), num_renderings());
+    DVC_ASSERT_EQ(uniform_buffers.size(), descriptor_sets.size());
+    DVC_ASSERT_EQ(uniform_buffers.size(), num_renderings());
     for (size_t i = 0; i < num_renderings(); i++) {
       spk::descriptor_buffer_info buffer_info;
       buffer_info.set_buffer(uniform_buffers[i].buffer);

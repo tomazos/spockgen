@@ -1,7 +1,5 @@
 #include "spsaccessors.h"
 
-#include <glog/logging.h>
-
 #include "dvc/string.h"
 
 namespace sps {
@@ -38,7 +36,7 @@ struct BoolAccessoryFactory : SingularAccessorFactory {
     if (member.stype->to_string() != "spk::bool32_t") return false;
 
     std::string name = member.name;
-    CHECK(dvc::endswith(name, "_"));
+    DVC_ASSERT(dvc::endswith(name, "_"));
     name = name.substr(0, name.size() - 1);
 
     auto accessor = new sps::BoolAccessor;
@@ -61,12 +59,12 @@ struct SpanAccessoryFactory : AccessorFactory {
         if (i == j) continue;
         sps::Member& subject = sstruct.members.at(j);
         if (subject.len.empty()) continue;
-        CHECK(subject.len.size() == 1);
+        DVC_ASSERT(subject.len.size() == 1);
         std::string len = subject.len.at(0);
         if (len != vcount.name) continue;
 
         std::string name = subject.name;
-        CHECK(dvc::endswith(name, "_"));
+        DVC_ASSERT(dvc::endswith(name, "_"));
         name = name.substr(0, name.size() - 1);
         if (dvc::startswith(name, "p_")) name = name.substr(2, name.size() - 2);
 
@@ -75,7 +73,7 @@ struct SpanAccessoryFactory : AccessorFactory {
         accessor->count = &scount;
         accessor->subject = &subject;
         std::string tname = accessor->count->stype->to_string();
-        CHECK(tname == "uint32_t" || tname == "size_t");
+        DVC_ASSERT(tname == "uint32_t" || tname == "size_t");
         sstruct.accessors.push_back(accessor);
         scount.accessors_assigned = true;
         subject.accessors_assigned = true;
@@ -91,11 +89,11 @@ struct StringAccessoryFactory : SingularAccessorFactory {
     if (!member.null_terminated) return false;
     if (!member.len.empty()) return false;
 
-    CHECK(member.stype->to_string() == "char const *");
+    DVC_ASSERT(member.stype->to_string() == "char const *");
 
     std::string name = member.name;
 
-    CHECK(dvc::endswith(name, "_"));
+    DVC_ASSERT(dvc::endswith(name, "_"));
     name = name.substr(0, name.size() - 1);
 
     if (dvc::startswith(name, "p_")) name = name.substr(2, name.size() - 2);

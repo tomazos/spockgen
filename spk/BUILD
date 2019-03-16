@@ -28,7 +28,9 @@ cc_library(
     ],
     linkopts = [
         "-ldl",
-        "-lglog",
         "-lSDL2",
+    ],
+    deps = [
+        "//dvc:log",
     ],
 )

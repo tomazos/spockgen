@@ -1,5 +1,7 @@
 #include "spkx/memory.h"
 
+#include "dvc/log.h"
+
 namespace spkx {
 
 memory_type_index find_compatible_memory_type(
@@ -12,7 +14,7 @@ memory_type_index find_compatible_memory_type(
     if (!(memory_type_bits & (1 << i))) continue;
     if (memory_properties.memory_types()[i].property_flags() & flags) return i;
   }
-  LOG(FATAL) << "no compatible memory type found";
+  DVC_FATAL("no compatible memory type found");
 }
 
 spk::buffer create_buffer(spk::device& device, size_t size,

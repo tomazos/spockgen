@@ -6,6 +6,7 @@ cc_library(
         "sps.h",
     ],
     deps = [
+        "//dvc:log",
         "//vks",
     ],
 )

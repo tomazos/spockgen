@@ -1,6 +1,6 @@
 #include "ft/glyph.h"
 
-#include "glog/logging.h"
+#include "dvc/log.h"
 
 namespace ft {
 
@@ -26,34 +26,34 @@ bool glyph::is_outline() const {
 }
 
 FT_BitmapGlyphRec& glyph::bitmap() {
-  CHECK(is_bitmap());
+  DVC_ASSERT(is_bitmap());
   FT_Glyph glyph = glyph_;
   FT_BitmapGlyph bitmap_glyph = (FT_BitmapGlyph)glyph;
-  CHECK(bitmap_glyph);
+  DVC_ASSERT(bitmap_glyph);
   return *bitmap_glyph;
 }
 
 const FT_BitmapGlyphRec& glyph::bitmap() const {
-  CHECK(is_bitmap());
+  DVC_ASSERT(is_bitmap());
   const FT_GlyphRec* glyph = glyph_;
   const FT_BitmapGlyphRec* bitmap_glyph = (const FT_BitmapGlyphRec*)glyph;
-  CHECK(bitmap_glyph);
+  DVC_ASSERT(bitmap_glyph);
   return *bitmap_glyph;
 }
 
 FT_OutlineGlyphRec& glyph::outline() {
-  CHECK(is_outline());
+  DVC_ASSERT(is_outline());
   FT_Glyph glyph = glyph_;
   FT_OutlineGlyph outline_glyph = (FT_OutlineGlyph)glyph;
-  CHECK(outline_glyph);
+  DVC_ASSERT(outline_glyph);
   return *outline_glyph;
 }
 
 const FT_OutlineGlyphRec& glyph::outline() const {
-  CHECK(is_outline());
+  DVC_ASSERT(is_outline());
   const FT_GlyphRec* glyph = glyph_;
   const FT_OutlineGlyphRec* outline_glyph = (const FT_OutlineGlyphRec*)glyph;
-  CHECK(outline_glyph);
+  DVC_ASSERT(outline_glyph);
   return *outline_glyph;
 }
 

@@ -9,6 +9,7 @@ cc_binary(
         "-lpng",
     ],
     deps = [
+        "//dvc:log",
         "//dvc:program",
         "//ft",
     ],
@@ -92,7 +93,6 @@ cc_binary(
         "skyfly.vert.spv",
     ],
     linkopts = [
-        "-lglog",
         "-lgflags",
         "-lpng",
     ],
@@ -114,7 +114,6 @@ cc_binary(
         "pointtest.vert.spv",
     ],
     linkopts = [
-        "-lglog",
         "-lgflags",
     ],
     deps = [
@@ -135,7 +134,6 @@ cc_binary(
         "triangletest1.vert.spv",
     ],
     linkopts = [
-        "-lglog",
         "-lgflags",
     ],
     deps = [

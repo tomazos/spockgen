@@ -8,7 +8,6 @@ cc_binary(
     linkopts = [
         "-ltinyxml2",
         "-lgflags",
-        "-lglog",
         "-lstdc++fs",
     ],
     deps = [

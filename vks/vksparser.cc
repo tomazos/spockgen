@@ -29,13 +29,13 @@ std::string enum_to_value(const vkr::Enum& enum_,
     return "(" + enum_.alias.value() + ")";
   else if (enum_.offset) {
     if (enum_.extnumber) extnumber = enum_.extnumber;
-    CHECK(extnumber);
+    DVC_ASSERT(extnumber);
     bool neg = enum_.dir.has_value();
-    if (neg) CHECK(enum_.dir.value() == "-");
+    if (neg) DVC_ASSERT(enum_.dir.value() == "-");
     return std::string("(") + (neg ? "-1" : "+1") + "* (1'000'000'000 + (" +
            extnumber.value() + "-1) * 1'000 + " + enum_.offset.value() + "))";
   } else {
-    LOG(FATAL) << "bad enum " << enum_.name;
+    DVC_FATAL("bad enum ", enum_.name);
   }
 }
 
@@ -45,7 +45,7 @@ void foreach_extension(const vks::Registry& registry, const vkr::start& start,
   for (const vkr::Extensions& extensions : start.extensions) {
     for (const vkr::Extension& extension : extensions.extension) {
       std::string supported = extension.supported.value();
-      CHECK(supported == "disabled" || supported == "vulkan") << supported;
+      DVC_ASSERT(supported == "disabled" || supported == "vulkan", supported);
       if (supported == "disabled") continue;
 
       std::optional<std::string> extnumber = extension.number;
@@ -54,7 +54,7 @@ void foreach_extension(const vks::Registry& registry, const vkr::start& start,
       if (extension.platform)
         platform = registry.platforms.at(extension.platform.value());
 
-      CHECK(extension.remove.empty());
+      DVC_ASSERT(extension.remove.empty());
       for (const vkr::Extension_require& require : extension.require)
         process_require(require, extnumber, platform);
     }
@@ -90,13 +90,13 @@ void parse_constants(vks::Registry& registry,
     }
 
   for (const vkr::Feature& feature : start.feature) {
-    CHECK(feature.remove.empty());
+    DVC_ASSERT(feature.remove.empty());
     for (const auto& require : feature.require) {
       for (const vkr::Enum& enum_ : require.enum_) {
         bool extension_enum =
             enum_.value || enum_.bitpos || enum_.alias || enum_.offset;
         if (!extension_enum)
-          CHECK(registry.constants.count(enum_.name) == 1) << enum_.name;
+          DVC_ASSERT(registry.constants.count(enum_.name) == 1, enum_.name);
         else {
           auto constant = new vks::Constant;
           constant->name = enum_.name;
@@ -115,13 +115,13 @@ void parse_constants(vks::Registry& registry,
           bool extension_enum =
               enum_.value || enum_.bitpos || enum_.alias || enum_.offset;
           if (!extension_enum)
-            CHECK(registry.constants.count(enum_.name) == 1) << enum_.name;
+            DVC_ASSERT(registry.constants.count(enum_.name) == 1, enum_.name);
           else {
             std::string name = enum_.name;
             std::string value = enum_to_value(enum_, extnumber);
             if (registry.constants.count(name))
-              CHECK_EQ(value, registry.constants.at(name)->value)
-                  << "mismatched value of " << name;
+              DVC_ASSERT_EQ(value, registry.constants.at(name)->value,
+                            "mismatched value of ", name);
             else {
               auto constant = new vks::Constant;
               constant->name = enum_.name;
@@ -159,17 +159,17 @@ void parse_enumerations(vks::Registry& registry, const vkr::start& start) {
     }
 
   for (const vkr::Enums& enums : start.enums) {
-    CHECK(enums.name);
+    DVC_ASSERT(enums.name);
     std::string name = enums.name.value();
     if (name == "API Constants" || name == "VkRenderPassCreateFlagBits")
       continue;
-    CHECK(types.count(name));
-    CHECK(enums.type) << enums.name.value();
+    DVC_ASSERT(types.count(name));
+    DVC_ASSERT(enums.type, enums.name.value());
     const vkr::Type& type = (*types.at(name));
-    CHECK_EQ(type.category.value(), "enum");
+    DVC_ASSERT_EQ(type.category.value(), "enum");
     auto enumeration = new vks::Enumeration;
     enumeration->name = name;
-    CHECK_NE(name, "VkPeerMemoryFeatureFlagBitsKHR");
+    DVC_ASSERT_NE(name, "VkPeerMemoryFeatureFlagBitsKHR");
     dvc::insert_or_die(registry.enumerations, name, enumeration);
     for (const vkr::Enum& enum_ : enums.enum_) {
       registry.enumerations.at(name)->enumerators.push_back(
@@ -213,7 +213,7 @@ void parse_bitmasks(vks::Registry& registry, const vkr::start& start) {
                              : type.name_subelement.value();
       if (type.category != "bitmask") continue;
       if (!type.alias) continue;
-      CHECK(registry.bitmasks.count(type.alias.value()));
+      DVC_ASSERT(registry.bitmasks.count(type.alias.value()));
       dvc::insert_or_die(registry.bitmasks, name,
                          registry.bitmasks.at(type.alias.value()));
     }
@@ -243,8 +243,8 @@ void parse_handles(vks::Registry& registry, const vkr::start& start) {
   foreach_handle([&](const vkr::Type& type, const std::string& name) {
     if (type.alias) return;
     std::string handle_type = type.type.at(0);
-    CHECK(handle_type == "VK_DEFINE_HANDLE" ||
-          handle_type == "VK_DEFINE_NON_DISPATCHABLE_HANDLE");
+    DVC_ASSERT(handle_type == "VK_DEFINE_HANDLE" ||
+               handle_type == "VK_DEFINE_NON_DISPATCHABLE_HANDLE");
     auto handle = new vks::Handle;
     handle->name = name;
     handle->dispatchable = (handle_type == "VK_DEFINE_HANDLE");
@@ -349,7 +349,7 @@ void parse_structs(vks::Registry& registry, TypeBackpatches& backpatches,
     struct_->name = name;
     struct_->is_union = is_union;
     if (type.returnedonly) {
-      CHECK(type.returnedonly == "true");
+      DVC_ASSERT(type.returnedonly == "true");
       struct_->returnedonly = true;
     } else
       struct_->returnedonly = false;
@@ -378,10 +378,10 @@ void parse_structs(vks::Registry& registry, TypeBackpatches& backpatches,
       vks::Member member_out;
       member_out.name = member_in.name;
       if (member_in.values) {
-        CHECK(member_idx == 0);
-        CHECK(member_in.name == "sType");
-        CHECK(member_in.type == "VkStructureType");
-        CHECK(type.member.at(1).name == "pNext");
+        DVC_ASSERT(member_idx == 0);
+        DVC_ASSERT(member_in.name == "sType");
+        DVC_ASSERT(member_in.type == "VkStructureType");
+        DVC_ASSERT(type.member.at(1).name == "pNext");
         if (registry.constants.count(member_in.values.value())) {
           struct_->structured_type =
               registry.constants.at(member_in.values.value());
@@ -391,7 +391,7 @@ void parse_structs(vks::Registry& registry, TypeBackpatches& backpatches,
       }
 
       if (member_in.altlen) {
-        CHECK(member_in.len);
+        DVC_ASSERT(member_in.len);
         for (const std::string& s : dvc::split(",", member_in.altlen.value()))
           member_out.len.push_back(s);
       } else if (member_in.len) {
@@ -402,14 +402,14 @@ void parse_structs(vks::Registry& registry, TypeBackpatches& backpatches,
       if (member_in.optional) {
         for (const std::string& s :
              dvc::split(",", member_in.optional.value())) {
-          CHECK(s == "true" || s == "false");
+          DVC_ASSERT(s == "true" || s == "false");
           member_out.optional.push_back(s == "true" ? true : false);
         }
       }
 
       mnc::Declaration decl =
           mnc::parse_declaration(parse_inner_text(member_in._element_));
-      CHECK_EQ(member_in.name, decl.name);
+      DVC_ASSERT_EQ(member_in.name, decl.name);
       mnc::Type* member_type = decl.type;
       backpatches.add_struct_member_backpatch(struct_, struct_->members.size(),
                                               member_type);
@@ -442,13 +442,13 @@ void parse_funcpointers(vks::Registry& registry, TypeBackpatches& backpatches,
   };
 
   foreach_funcpointer([&](const vkr::Type& type, const std::string& name) {
-    CHECK(!type.alias);
+    DVC_ASSERT(!type.alias);
     auto function_prototype_out = new vks::FunctionPrototype;
     function_prototype_out->name = name;
     std::string decl = parse_inner_text(type._element_);
     mnc::FunctionPrototype function_prototype_in =
         mnc::parse_function_prototype(decl);
-    CHECK_EQ(name, function_prototype_in.name);
+    DVC_ASSERT_EQ(name, function_prototype_in.name);
 
     backpatches.add_function_prototype_backpatch(function_prototype_out,
                                                  function_prototype_in);
@@ -462,7 +462,7 @@ void parse_commands(vks::Registry& registry, TypeBackpatches& backpatches,
   auto foreach_command = [&](auto process_command) {
     for (const vkr::Commands& commands : start.commands)
       for (const vkr::Command& command : commands.command) {
-        CHECK(!command.alias_subelement);
+        DVC_ASSERT(!command.alias_subelement);
         process_command(command);
       }
   };
@@ -487,22 +487,22 @@ void parse_commands(vks::Registry& registry, TypeBackpatches& backpatches,
       command_out->successcodes.push_back(registry.constants.at(successcode));
     }
 
-    CHECK(command_in.proto.has_value());
+    DVC_ASSERT(command_in.proto.has_value());
     mnc::Declaration decl = mnc::parse_declaration(
         parse_inner_text(command_in.proto.value()._element_));
-    CHECK_EQ(decl.name, name);
+    DVC_ASSERT_EQ(decl.name, name);
     backpatches.add_command_return_backpatch(command_out, decl.type);
     for (const vkr::Command_param& param_in : command_in.param) {
       mnc::Declaration decl =
           mnc::parse_declaration(parse_inner_text(param_in._element_));
-      CHECK_EQ(decl.name, param_in.name);
+      DVC_ASSERT_EQ(decl.name, param_in.name);
       vks::Param param_out;
       param_out.name = decl.name;
 
       if (param_in.optional)
         for (const std::string& opt :
              dvc::split(",", param_in.optional.value())) {
-          CHECK(opt == "true" || opt == "false");
+          DVC_ASSERT(opt == "true" || opt == "false");
           param_out.optional.push_back(opt == "true");
         }
 
@@ -528,7 +528,7 @@ void parse_commands(vks::Registry& registry, TypeBackpatches& backpatches,
 }
 
 vks::Entity* lookup_entity(vks::Registry& registry, const std::string& name) {
-  CHECK(registry.entities.count(name)) << "No such entity: " << name;
+  DVC_ASSERT(registry.entities.count(name), "No such entity: ", name);
   return registry.entities.at(name);
 }
 
@@ -542,7 +542,7 @@ vks::Expr* translate_expr(vks::Registry& registry, mnc::Expr* expr) {
     result->number = number->number;
     return result;
   } else {
-    LOG(FATAL) << "Unknown expr: " << typeid(expr).name();
+    DVC_FATAL("Unknown expr: ", typeid(expr).name());
   }
 }
 
@@ -565,7 +565,7 @@ vks::Type* translate_type(vks::Registry& registry, mnc::Type* type) {
     result->N = translate_expr(registry, array->N);
     return result;
   }
-  LOG(ERROR) << "Unknown mnc type: " << typeid(type).name();
+  DVC_ERROR("Unknown mnc type: ", typeid(type).name());
   return nullptr;  // ???
 }
 
@@ -627,7 +627,7 @@ void remove_disabled(vks::Registry& registry, const vkr::start& start) {
   for (const vkr::Extensions& extensions : start.extensions) {
     for (const vkr::Extension& extension : extensions.extension) {
       std::string supported = extension.supported.value();
-      CHECK(supported == "disabled" || supported == "vulkan") << supported;
+      DVC_ASSERT(supported == "disabled" || supported == "vulkan", supported);
       if (supported == "vulkan") continue;
 
       for (const vkr::Extension_require& require : extension.require) {
@@ -650,9 +650,9 @@ void apply_constant_extends(
     vks::Registry& registry,
     std::multimap<std::string, vks::Constant*>& extends) {
   for (const auto& [extend, constant] : extends) {
-    CHECK(registry.enumerations.count(extend))
-        << "Could not find extension enumeration: " << extend << " for "
-        << constant->name;
+    DVC_ASSERT(registry.enumerations.count(extend),
+               "Could not find extension enumeration: ", extend, " for ",
+               constant->name);
     registry.enumerations.at(extend)->enumerators.push_back(constant);
   }
 }
@@ -662,7 +662,7 @@ void build_dispatch_tables(vks::Registry& registry) {
                                    vks::Command* command) {
     vks::DispatchTable* dispatch_table = registry.dispatch_table(kind);
     dispatch_table->commands.push_back(command);
-    CHECK(command->dispatch_table == nullptr);
+    DVC_ASSERT(command->dispatch_table == nullptr);
     command->dispatch_table = dispatch_table;
   };
   for (vks::DispatchTableKind kind :
@@ -683,10 +683,10 @@ void build_dispatch_tables(vks::Registry& registry) {
     }
     auto first_param_type =
         dynamic_cast<const vks::Name*>(command->params.at(0).type);
-    CHECK(first_param_type);
+    DVC_ASSERT(first_param_type);
     auto dispatch_handle =
         dynamic_cast<const vks::Handle*>(first_param_type->entity);
-    CHECK(dispatch_handle);
+    DVC_ASSERT(dispatch_handle);
     if (dispatch_handle->name == "VkInstance" ||
         dispatch_handle->name == "VkPhysicalDevice") {
       relate_dispatch_table(vks::DispatchTableKind::INSTANCE, command);

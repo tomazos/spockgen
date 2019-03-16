@@ -1,17 +1,18 @@
 #include <SDL2/SDL_vulkan.h>
 #include <gflags/gflags.h>
-#include <glog/logging.h>
 #include <functional>
 #include <set>
 
+#include "dvc/log.h"
 #include "dvc/terminate.h"
 #include "program.h"
 
 namespace {
 
 void init_sdl() {
-  CHECK_EQ(SDL_Init(SDL_INIT_VIDEO /*| SDL_INIT_AUDIO*/), 0) << SDL_GetError();
-  CHECK_EQ(SDL_SetRelativeMouseMode(SDL_TRUE), 0) << SDL_GetError();
+  DVC_ASSERT_EQ(SDL_Init(SDL_INIT_VIDEO /*| SDL_INIT_AUDIO*/), 0,
+                SDL_GetError());
+  DVC_ASSERT_EQ(SDL_SetRelativeMouseMode(SDL_TRUE), 0, SDL_GetError());
 }
 
 void shutdown_sdl() { SDL_Quit(); }
@@ -20,7 +21,7 @@ SDL_Window* create_window(const std::string& name) {
   SDL_Window* window = SDL_CreateWindow(
       name.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0,
       SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_VULKAN);
-  CHECK(window) << SDL_GetError();
+  DVC_ASSERT(window, SDL_GetError());
   return window;
 }
 
@@ -35,14 +36,14 @@ glm::ivec2 get_window_size(SDL_Window* window) {
 std::vector<std::string> get_sdl_extensions(SDL_Window* window) {
   unsigned int count;
 
-  CHECK(SDL_Vulkan_GetInstanceExtensions(window, &count, nullptr))
-      << SDL_GetError();
+  DVC_ASSERT(SDL_Vulkan_GetInstanceExtensions(window, &count, nullptr),
+             SDL_GetError());
 
   std::vector<const char*> extensions_cstr(count);
 
-  CHECK(
-      SDL_Vulkan_GetInstanceExtensions(window, &count, extensions_cstr.data()))
-      << SDL_GetError();
+  DVC_ASSERT(
+      SDL_Vulkan_GetInstanceExtensions(window, &count, extensions_cstr.data()),
+      SDL_GetError());
 
   std::vector<std::string> extensions(count);
   for (unsigned int i = 0; i < count; i++) extensions[i] = extensions_cstr[i];
@@ -56,19 +57,19 @@ debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                void* pUserData) {
   switch (messageSeverity) {
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-      VLOG(0) << pCallbackData->pMessage;
+      DVC_LOG(pCallbackData->pMessage);
       break;
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-      LOG(INFO) << pCallbackData->pMessage;
+      DVC_LOG(pCallbackData->pMessage);
       break;
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-      LOG(WARNING) << pCallbackData->pMessage;
+      DVC_ERROR(pCallbackData->pMessage);
       break;
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-      LOG(ERROR) << pCallbackData->pMessage;
+      DVC_ERROR(pCallbackData->pMessage);
       break;
     default:
-      LOG(FATAL) << "Unexpected message severity: " << messageSeverity;
+      DVC_FATAL("Unexpected message severity: ", messageSeverity);
   };
 
   return VK_FALSE;
@@ -124,7 +125,7 @@ spk::debug_utils_messenger_ext create_debug_utils_messenger(
 spk::surface_khr create_surface(SDL_Window* window, spk::instance& instance) {
   spk::surface_khr_ref surface_ref;
   if (!SDL_Vulkan_CreateSurface(window, instance, &surface_ref))
-    LOG(FATAL) << SDL_GetError();
+    DVC_FATAL(SDL_GetError());
   return {surface_ref, instance, instance.dispatch_table(), nullptr};
 }
 
@@ -189,7 +190,7 @@ spk::physical_device select_physical_device(spk::instance& instance,
     if (is_physical_device_suitable(physical_device, surface))
       return std::move(physical_device);
 
-  LOG(FATAL) << "Unable to find suitable physical device.";
+  DVC_FATAL("Unable to find suitable physical device.");
 }
 
 uint32_t select_queue_family(
@@ -203,7 +204,7 @@ uint32_t select_queue_family(
     index++;
   }
 
-  LOG(FATAL) << "Queue family not found.";
+  DVC_FATAL("Queue family not found.");
 }
 
 uint32_t select_graphics_queue_family(spk::physical_device& physical_device) {
@@ -258,17 +259,14 @@ spk::device create_device(spk::physical_device& physical_device,
 namespace spkx {
 
 program::global::global(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   dvc::install_terminate_handler();
-  google::InstallFailureFunction(dvc::log_stacktrace);
   init_sdl();
 }
 
 program::global::~global() {
   shutdown_sdl();
   gflags::ShutDownCommandLineFlags();
-  google::ShutdownGoogleLogging();
 }
 
 program::program(int argc, char** argv)

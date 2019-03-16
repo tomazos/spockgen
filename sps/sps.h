@@ -1,8 +1,8 @@
 #pragma once
 
-#include <glog/logging.h>
 #include <optional>
 
+#include "dvc/log.h"
 #include "vks/vks.h"
 
 namespace sps {
@@ -163,7 +163,7 @@ struct Param {
   bool is_allocation_callbacks() const {
     bool result = (name == "pAllocator");
     if (result)
-      CHECK_EQ(stype->to_string(), "spk::allocation_callbacks const *");
+      DVC_ASSERT_EQ(stype->to_string(), "spk::allocation_callbacks const *");
     return result;
   }
 };
@@ -180,12 +180,12 @@ struct Command : Entity {
     if (sreturn_type->to_string() != "void") return false;
     auto szptr =
         dynamic_cast<const vks::Pointer*>(params.at(params.size() - 2).stype);
-    CHECK(szptr);
-    CHECK(szptr->T->to_string() == "uint32_t" ||
-          szptr->T->to_string() == "size_t");
+    DVC_ASSERT(szptr);
+    DVC_ASSERT(szptr->T->to_string() == "uint32_t" ||
+               szptr->T->to_string() == "size_t");
     auto resptr =
         dynamic_cast<const vks::Pointer*>(params.at(params.size() - 1).stype);
-    CHECK(resptr);
+    DVC_ASSERT(resptr);
 
     if (resptr->T->to_string() == "void") return false;
 
@@ -199,15 +199,15 @@ struct Command : Entity {
     for (const Enumerator* successcode : successcodes)
       if (successcode->name == "incomplete") has_incomplete = true;
     if (!has_incomplete) return false;
-    CHECK_EQ(successcodes.size(), 2);
+    DVC_ASSERT_EQ(successcodes.size(), 2);
     auto szptr =
         dynamic_cast<const vks::Pointer*>(params.at(params.size() - 2).stype);
-    CHECK(szptr);
-    CHECK(szptr->T->to_string() == "uint32_t" ||
-          szptr->T->to_string() == "size_t");
+    DVC_ASSERT(szptr);
+    DVC_ASSERT(szptr->T->to_string() == "uint32_t" ||
+               szptr->T->to_string() == "size_t");
     auto resptr =
         dynamic_cast<const vks::Pointer*>(params.at(params.size() - 1).stype);
-    CHECK(resptr);
+    DVC_ASSERT(resptr);
 
     if (resptr->T->to_string() == "void") return false;
 

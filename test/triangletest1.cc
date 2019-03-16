@@ -1,13 +1,13 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
 #include <gflags/gflags.h>
-#include <glog/logging.h>
 #include <algorithm>
 #include <filesystem>
 #include <functional>
 #include <set>
 
 #include "dvc/file.h"
+#include "dvc/log.h"
 #include "dvc/terminate.h"
 #include "spk/loader.h"
 #include "spk/spock.h"
@@ -49,12 +49,12 @@ std::vector<std::string> get_sdl_extensions(SDL_Window* window) {
   unsigned int count;
 
   if (!SDL_Vulkan_GetInstanceExtensions(window, &count, nullptr))
-    LOG(FATAL) << SDL_GetError();
+    DVC_FATAL(SDL_GetError());
 
   std::vector<const char*> extensions_cstr(count);
 
   if (!SDL_Vulkan_GetInstanceExtensions(window, &count, extensions_cstr.data()))
-    LOG(FATAL) << SDL_GetError();
+    DVC_FATAL(SDL_GetError());
 
   std::vector<std::string> extensions(count);
   for (unsigned int i = 0; i < count; i++) extensions[i] = extensions_cstr[i];
@@ -62,7 +62,7 @@ std::vector<std::string> get_sdl_extensions(SDL_Window* window) {
 }
 
 void setup_sdl() {
-  if (SDL_Init(SDL_INIT_VIDEO) != 0) LOG(FATAL) << SDL_GetError();
+  if (SDL_Init(SDL_INIT_VIDEO) != 0) DVC_FATAL(SDL_GetError());
 }
 
 DEFINE_bool(fullscreen, false, "use a fullscreen window");
@@ -76,7 +76,7 @@ SDL_Window* create_window() {
           : SDL_CreateWindow("triangletest", SDL_WINDOWPOS_CENTERED,
                              SDL_WINDOWPOS_CENTERED, 800, 600,
                              SDL_WINDOW_VULKAN);
-  if (!window) LOG(FATAL) << SDL_GetError();
+  if (!window) DVC_FATAL(SDL_GetError());
   return window;
 }
 
@@ -131,7 +131,7 @@ spk::debug_utils_messenger_ext create_debug_utils_messenger(
 spk::surface_khr create_surface(SDL_Window* window, spk::instance& instance) {
   spk::surface_khr_ref surface_ref;
   if (!SDL_Vulkan_CreateSurface(window, instance, &surface_ref))
-    LOG(FATAL) << SDL_GetError();
+    DVC_FATAL(SDL_GetError());
   return {surface_ref, instance, instance.dispatch_table(), nullptr};
 }
 
@@ -205,7 +205,7 @@ spk::physical_device select_physical_device(spk::instance& instance,
 
   auto& e = physical_device_evaluations;
   size_t idx = std::distance(e.begin(), std::max_element(e.begin(), e.end()));
-  CHECK_GT(physical_device_evaluations.at(idx), 0);
+  DVC_ASSERT_GT(physical_device_evaluations.at(idx), 0);
   return std::move(physical_devices.at(idx));
 }
 
@@ -218,7 +218,7 @@ uint32_t select_queue_family(spk::physical_device& physical_device,
                               properties_vector.at(i)))
       return i;
   }
-  LOG(FATAL) << "no suitable queue family";
+  DVC_FATAL("no suitable queue family");
 }
 
 spk::device create_device(spk::physical_device& physical_device,
@@ -267,7 +267,7 @@ spk::surface_format_khr select_surface_format(
       return format;
   }
 
-  LOG(FATAL) << "TODO: no good format";
+  DVC_FATAL("TODO: no good format");
 }
 
 spk::extent_2d get_swap_extent(const SurfaceInfo& info, SDL_Window* window) {
@@ -301,8 +301,8 @@ Swapchain create_swapchain(spk::physical_device& physical_device,
   spk::present_mode_khr present_mode = spk::present_mode_khr::fifo_khr;
 
   spk::extent_2d swap_extent = get_swap_extent(surface_info, window);
-  CHECK_LE(surface_info.capabilities.min_image_count(),
-           surface_info.capabilities.max_image_count());
+  DVC_ASSERT_LE(surface_info.capabilities.min_image_count(),
+                surface_info.capabilities.max_image_count());
   uint32_t num_images = surface_info.capabilities.min_image_count() + 2;
   if (surface_info.capabilities.max_image_count() < num_images)
     num_images = surface_info.capabilities.max_image_count();
@@ -353,7 +353,7 @@ spk::image_view create_image_view(spk::device& device, spk::image& image,
 
 spk::shader_module create_shader(spk::device& device,
                                  const std::filesystem::path& path) {
-  CHECK(exists(path)) << "file not found: " << path;
+  DVC_ASSERT(exists(path), "file not found: ", path);
   std::string code = dvc::load_file(path);
   spk::shader_module_create_info create_info;
   create_info.set_code_size(code.size());
@@ -620,8 +620,8 @@ loop:
   while (1) {
     if (SDL_GetTicks() > last_report + 1000) {
       last_report = SDL_GetTicks();
-      LOG(ERROR) << "niterations " << niterations << " nnofence " << nnofence
-                 << " nnoacquire " << nnoacquire << " npresent " << npresent;
+      DVC_ERROR("niterations ", niterations, " nnofence ", nnofence,
+                " nnoacquire ", nnoacquire, " npresent ", npresent);
       niterations = 0;
       nnofence = 0;
       nnoacquire = 0;
@@ -653,8 +653,8 @@ loop:
         nnofence++;
         goto loop;
       default:
-        LOG(FATAL) << "unexpected result " << wait_for_fences_result
-                   << " from wait_for_fences";
+        DVC_FATAL("unexpected result ", wait_for_fences_result,
+                  " from wait_for_fences");
     }
 
     uint32_t image_index;
@@ -669,8 +669,8 @@ loop:
         nnoacquire++;
         goto loop;
       default:
-        LOG(FATAL) << "acquire_next_image_khr returned "
-                   << acquire_next_image_result;
+        DVC_FATAL("acquire_next_image_khr returned ",
+                  acquire_next_image_result);
     }
 
     device.reset_fences({&current_fence, 1});
@@ -698,9 +698,9 @@ loop:
 done:
 
   for (spk::fence_ref fence : fences) {
-    CHECK_EQ(spk::result::success,
-             device.wait_for_fences({&fence, 1}, true /*wait_all*/,
-                                    std::numeric_limits<uint64_t>::max()));
+    DVC_ASSERT_EQ(spk::result::success,
+                  device.wait_for_fences({&fence, 1}, true /*wait_all*/,
+                                         std::numeric_limits<uint64_t>::max()));
   }
   queue.wait_idle();
   device.wait_idle();
@@ -749,10 +749,8 @@ void triangle_test() {
 }  // namespace
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   dvc::install_terminate_handler();
-  google::InstallFailureFunction(std::terminate);
 
   triangle_test();
 }

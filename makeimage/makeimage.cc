@@ -14,18 +14,16 @@ DEFINE_string(filename, "", "output filename");
 namespace {
 
 void check_flags() {
-  CHECK(FLAGS_width > 0) << "set --width";
-  CHECK(FLAGS_height > 0) << "set --height";
-  CHECK(!FLAGS_filename.empty()) << "set --filename";
+  DVC_ASSERT(FLAGS_width > 0, "set --width");
+  DVC_ASSERT(FLAGS_height > 0, "set --height");
+  DVC_ASSERT(!FLAGS_filename.empty(), "set --filename");
 }
 
 }  // namespace
 
 ImageMaker::ImageMaker(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   dvc::install_terminate_handler();
-  google::InstallFailureFunction(dvc::log_stacktrace);
   check_flags();
   width = FLAGS_width;
   height = FLAGS_height;
@@ -33,7 +31,4 @@ ImageMaker::ImageMaker(int argc, char** argv) {
   filename = FLAGS_filename;
 }
 
-ImageMaker::~ImageMaker() {
-  gflags::ShutDownCommandLineFlags();
-  google::ShutdownGoogleLogging();
-}
+ImageMaker::~ImageMaker() { gflags::ShutDownCommandLineFlags(); }

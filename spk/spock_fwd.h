@@ -1,6 +1,5 @@
 #pragma once
 
-#include <glog/logging.h>
 #include <vulkan/vulkan.h>
 #include <memory>
 #include <ostream>

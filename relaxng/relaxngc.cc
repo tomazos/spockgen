@@ -1,5 +1,4 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
 #include <rapidjson/ostreamwrapper.h>
 #include <rapidjson/writer.h>
 #include <experimental/filesystem>
@@ -89,7 +88,7 @@ std::string_view token_kind_to_string(Token::Kind kind) {
     case Token::AMPERSAND:
       return "AMPERSAND";
   }
-  LOG(FATAL) << "unknown token::kind";
+  DVC_FATAL("unknown token::kind");
 }
 
 std::ostream& operator<<(std::ostream& o, const Token& tok) {
@@ -105,7 +104,7 @@ struct SchemaScanner : dvc::scanner {
     std::ostringstream oss;
     while (true) {
       char c = pop();
-      CHECK(peek() != dvc::scanner::eof);
+      DVC_ASSERT(peek() != dvc::scanner::eof);
       if (c == '"') return oss.str();
       oss.write(&c, 1);
     }
@@ -178,7 +177,7 @@ struct SchemaScanner : dvc::scanner {
       }
     }
 
-    LOG(FATAL) << "Unexpected character: " << c << " at line " << l;
+    DVC_FATAL("Unexpected character: ", c, " at line ", l);
   }
 };
 
@@ -217,8 +216,8 @@ struct BinaryDispositionTable {
       for (auto right :
            {MemberDisposition::NONE, MemberDisposition::OPTIONAL,
             MemberDisposition::REQUIRED, MemberDisposition::MULTIPLE}) {
-        CHECK(table.count(left) == 1);
-        CHECK(table.at(left).count(right) == 1);
+        DVC_ASSERT(table.count(left) == 1);
+        DVC_ASSERT(table.at(left).count(right) == 1);
       }
   }
 
@@ -494,8 +493,8 @@ MemberDispositions BinaryPattern::get_binary_member_dispositions(
     for (const auto& k : keys) {
       if (a.count(k) && b.count(k))
         if (a.at(k) != b.at(k))
-          CHECK(a.at(k)->is_simple(schema) && b.at(k)->is_simple(schema))
-              << "nonsimple nonequal subelements " << k;
+          DVC_ASSERT(a.at(k)->is_simple(schema) && b.at(k)->is_simple(schema),
+                     "nonsimple nonequal subelements ", k);
 
       result[k] = (a.count(k) ? a.at(k) : b.at(k));
     }
@@ -642,23 +641,23 @@ class SchemaParser : public dvc::parser<Token> {
     while (peek() == Token::NAMESPACE) parse_namespace_decl();
 
     while (peek() != Token::END)
-      CHECK(schema.productions.insert(parse_production()).second);
+      DVC_ASSERT(schema.productions.insert(parse_production()).second);
 
     return schema;
   }
 
   void parse_namespace_decl() {
-    CHECK_EQ(pop(), Token::NAMESPACE);
-    CHECK_EQ(pop(), Token::IDENTIFIER);
-    CHECK_EQ(pop(), Token::EQUALS);
-    CHECK_EQ(pop(), Token::STRING);
-    LOG(INFO) << peek();
+    DVC_ASSERT_EQ(pop(), Token::NAMESPACE);
+    DVC_ASSERT_EQ(pop(), Token::IDENTIFIER);
+    DVC_ASSERT_EQ(pop(), Token::EQUALS);
+    DVC_ASSERT_EQ(pop(), Token::STRING);
+    DVC_LOG(peek());
   }
 
   std::pair<std::string, ast::PPattern> parse_production() {
     Token key = pop();
-    CHECK(key == Token::IDENTIFIER) << "unexpected token: " << key;
-    CHECK_EQ(pop(), Token::EQUALS);
+    DVC_ASSERT(key == Token::IDENTIFIER, "unexpected token: ", key);
+    DVC_ASSERT_EQ(pop(), Token::EQUALS);
     return {std::move(key.spelling), parse_pattern()};
   }
 
@@ -674,12 +673,11 @@ class SchemaParser : public dvc::parser<Token> {
     } else if (peek() == Token::LPAREN) {
       pop();
       pattern = parse_pattern();
-      CHECK_EQ(pop(), Token::RPAREN);
+      DVC_ASSERT_EQ(pop(), Token::RPAREN);
     } else if (peek() == Token::IDENTIFIER) {
       pattern = parse_name();
     } else {
-      LOG(FATAL) << "expected element, attribute, identifier, paren: "
-                 << peek();
+      DVC_FATAL("expected element, attribute, identifier, paren: ", peek());
     }
 
     if (peek() == Token::QMARK) {
@@ -709,20 +707,20 @@ class SchemaParser : public dvc::parser<Token> {
 
   template <typename BracedPattern>
   ast::PPattern parse_braced_pattern(Token::Kind kind) {
-    CHECK_EQ(pop(), kind);
+    DVC_ASSERT_EQ(pop(), kind);
     Token id = pop();
-    CHECK_EQ(id, Token::IDENTIFIER);
-    CHECK_EQ(pop(), Token::LBRACE);
+    DVC_ASSERT_EQ(id, Token::IDENTIFIER);
+    DVC_ASSERT_EQ(pop(), Token::LBRACE);
     ast::PPattern pattern = parse_pattern();
-    CHECK_EQ(pop(), Token::RBRACE);
+    DVC_ASSERT_EQ(pop(), Token::RBRACE);
     return std::make_shared<BracedPattern>(id.spelling, std::move(pattern));
   }
 
   ast::PPattern parse_mixed() {
-    CHECK_EQ(pop(), Token::MIXED);
-    CHECK_EQ(pop(), Token::LBRACE);
+    DVC_ASSERT_EQ(pop(), Token::MIXED);
+    DVC_ASSERT_EQ(pop(), Token::LBRACE);
     ast::PPattern pattern = parse_pattern();
-    CHECK_EQ(pop(), Token::RBRACE);
+    DVC_ASSERT_EQ(pop(), Token::RBRACE);
     return std::make_shared<ast::Mixed>(std::move(pattern));
   }
 
@@ -736,7 +734,7 @@ class SchemaParser : public dvc::parser<Token> {
 
   ast::PPattern parse_name() {
     Token id = pop();
-    CHECK_EQ(id, Token::IDENTIFIER);
+    DVC_ASSERT_EQ(id, Token::IDENTIFIER);
     return std::make_shared<ast::Name>(id.spelling);
   }
 };
@@ -770,7 +768,7 @@ void generate_relaxng_parser(const std::filesystem::path& schema_file,
   std::map<std::string, const ast::Pattern*> global_name_patterns;
 
   for (const auto& [name, pattern] : schema.productions) {
-    CHECK(global_name_patterns.count(name) == 0);
+    DVC_ASSERT(global_name_patterns.count(name) == 0);
     global_pattern_names[pattern.get()] = name;
     global_name_patterns[name] = pattern.get();
   }
@@ -802,10 +800,10 @@ void generate_relaxng_parser(const std::filesystem::path& schema_file,
         simple_elements.insert(element);
       else {
         if (element_name_types.count(type_name)) type_name = type_name + "2";
-        CHECK(element_type_names.count(element) == 0)
-            << "duplicate element type name: " << type_name;
-        CHECK(element_name_types.count(type_name) == 0)
-            << "duplicate element type name: " << type_name;
+        DVC_ASSERT(element_type_names.count(element) == 0,
+                   "duplicate element type name: ", type_name);
+        DVC_ASSERT(element_name_types.count(type_name) == 0,
+                   "duplicate element type name: ", type_name);
         element_type_names[element] = type_name;
         element_name_types[type_name] = element;
       }
@@ -824,9 +822,9 @@ void generate_relaxng_parser(const std::filesystem::path& schema_file,
       case ast::MemberDisposition::MULTIPLE:
         return "std::vector<" + type + ">";
       case ast::MemberDisposition::NONE:
-        LOG(FATAL) << "none disposition: " << (int)disposition;
+        DVC_FATAL("none disposition: ", (int)disposition);
     }
-    LOG(FATAL) << "none disposition: " << (int)disposition;
+    DVC_FATAL("none disposition: ", (int)disposition);
   };
 
   struct StructDesign {
@@ -1021,12 +1019,11 @@ DEFINE_string(schema, "", "The input compact relaxng schema file");
 DEFINE_string(hout, "", "The output generated C++ .h file");
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  if (FLAGS_schema.empty()) LOG(FATAL) << "--schema required";
-  if (FLAGS_protocol.empty()) LOG(FATAL) << "--protocol required";
+  if (FLAGS_schema.empty()) DVC_FATAL("--schema required");
+  if (FLAGS_protocol.empty()) DVC_FATAL("--protocol required");
   std::filesystem::path schema = FLAGS_schema;
-  if (!exists(schema)) LOG(FATAL) << "File not found: " << schema;
+  if (!exists(schema)) DVC_FATAL("File not found: ", schema);
   std::filesystem::path hout = FLAGS_hout;
   generate_relaxng_parser(schema, hout);
 }

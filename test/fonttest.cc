@@ -1,6 +1,7 @@
-#include <glog/logging.h>
+#include <gflags/gflags.h>
 #include <png++/png.hpp>
 
+#include "dvc/log.h"
 #include "dvc/program.h"
 
 #include "ft/face.h"
@@ -37,8 +38,8 @@ int main(int argc, char** argv) {
 
   std::string target = program.args.at(0);
 
-  CHECK(!target.empty()) << "usage: fonttest <outimg>";
-  CHECK(!FLAGS_font.empty()) << "set --font";
+  DVC_ASSERT(!target.empty(), "usage: fonttest <outimg>");
+  DVC_ASSERT(!FLAGS_font.empty(), "set --font");
 
   png::image<png::gray_pixel> image(1000, 1000);
 

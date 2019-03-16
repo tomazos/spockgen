@@ -1,3 +1,4 @@
+#include <gflags/gflags.h>
 #include <map>
 
 #include "makeimage/makeimage.h"
@@ -9,7 +10,7 @@ int main(int argc, char** argv) {
 
   std::map<int64_t, double> m0 = {{0, 1}};
 
-  CHECK(FLAGS_numiters > 0) << "set --numiters";
+  DVC_ASSERT(FLAGS_numiters > 0, "set --numiters");
 
   for (uint64_t i = 0; i < FLAGS_numiters; ++i) {
     std::map<int64_t, double> m1;

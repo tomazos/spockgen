@@ -1,5 +1,4 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
 #include <iostream>
 #include <set>
 #include <unordered_set>
@@ -208,7 +207,7 @@ void write_header(const sps::Registry& registry) {
       for (const auto& accessor : struct_->accessors) {
         if (auto value_accessor =
                 dynamic_cast<const sps::ValueAccessor*>(accessor)) {
-          CHECK(dvc::endswith(value_accessor->member->name, "_"));
+          DVC_ASSERT(dvc::endswith(value_accessor->member->name, "_"));
           std::string mname = value_accessor->member->name;
           std::string bname = mname.substr(0, mname.size() - 1);
           bool large = value_accessor->large;
@@ -253,7 +252,7 @@ void write_header(const sps::Registry& registry) {
           std::string msubject = span_accessor->subject->name;
           const vks::Pointer* ptr_type =
               dynamic_cast<const vks::Pointer*>(span_accessor->subject->stype);
-          CHECK(ptr_type);
+          DVC_ASSERT(ptr_type);
           const vks::Type* element_type = ptr_type->T;
           std::string aname = span_accessor->name;
 
@@ -267,7 +266,7 @@ void write_header(const sps::Registry& registry) {
                       "};}");
           }
         } else {
-          LOG(FATAL) << "Unknown Accessor subclass " << typeid(accessor).name();
+          DVC_FATAL("Unknown Accessor subclass ", typeid(accessor).name());
         }
       }
       h.println();
@@ -369,7 +368,8 @@ void write_header(const sps::Registry& registry) {
       if (isresult) {
         h.println("    switch (res) {");
         if (isonesuccess) {
-          CHECK(command->command->successcodes.at(0)->name == "VK_SUCCESS");
+          DVC_ASSERT(command->command->successcodes.at(0)->name ==
+                     "VK_SUCCESS");
           h.println("      case VK_SUCCESS: return;");
         } else {
           for (const sps::Enumerator* successcode : command->successcodes) {
@@ -725,10 +725,9 @@ inline std::unique_ptr<spk::device_dispatch_table> load_device_dispatch_table(
             h.print("  return {result_");
             if (reshand->parent) {
               if (reshand->parent != handle) {
-                LOG(ERROR) << "mismatch parent: "
-                           << member_function->command->name << " member of "
-                           << handle->name << " but parent "
-                           << reshand->parent->name;
+                DVC_ERROR("mismatch parent: ", member_function->command->name,
+                          " member of ", handle->name, " but parent ",
+                          reshand->parent->name);
               }
               h.print(", handle_");
             }
@@ -767,10 +766,9 @@ inline std::unique_ptr<spk::device_dispatch_table> load_device_dispatch_table(
             h.println("    result2_.emplace_back(ref");
             if (reshand->parent) {
               if (reshand->parent != handle) {
-                LOG(ERROR) << "mismatch parent: "
-                           << member_function->command->name << " member of "
-                           << handle->name << " but parent "
-                           << reshand->parent->name;
+                DVC_ERROR("mismatch parent: ", member_function->command->name,
+                          " member of ", handle->name, " but parent ",
+                          reshand->parent->name);
               }
               h.print(", handle_");
             }
@@ -796,14 +794,13 @@ inline std::unique_ptr<spk::device_dispatch_table> load_device_dispatch_table(
 }
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  CHECK(!FLAGS_vkxml.empty()) << "--vkxml required";
+  DVC_ASSERT(!FLAGS_vkxml.empty(), "--vkxml required");
 
   tinyxml2::XMLDocument doc;
-  CHECK(doc.LoadFile(FLAGS_vkxml.c_str()) == tinyxml2::XML_SUCCESS)
-      << "Unable to parse " << FLAGS_vkxml;
+  DVC_ASSERT(doc.LoadFile(FLAGS_vkxml.c_str()) == tinyxml2::XML_SUCCESS,
+             "Unable to parse ", FLAGS_vkxml);
 
   auto start = relaxng::parse<vkr::start>(doc.RootElement());
 
@@ -821,7 +818,7 @@ int main(int argc, char** argv) {
     sps::Registry spsregistry = build_spock_registry(vksregistry);
 
     write_header(spsregistry);
-    CHECK_EQ(
+    DVC_ASSERT_EQ(
         0,
         std::system(
             ("/usr/bin/clang-format -i -style=Google " + FLAGS_outh).c_str()));

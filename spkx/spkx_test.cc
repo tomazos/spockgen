@@ -1,5 +1,3 @@
-#include <glog/logging.h>
-
 #include "spkx/presenter.h"
 #include "spkx/program.h"
 

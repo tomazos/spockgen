@@ -18,8 +18,10 @@ cc_library(
     ],
     linkopts = [
         "-lfreetype",
-        "-lglog",
         "-lstdc++fs",
+    ],
+    deps = [
+        "//dvc:log",
     ],
 )
 

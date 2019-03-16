@@ -1,6 +1,5 @@
 #include "sps/spsbuilder.h"
 
-#include <glog/logging.h>
 #include <cctype>
 #include <clocale>
 #include <map>
@@ -19,7 +18,7 @@ charkind to_charkind(char c) {
   if (std::isdigit(c)) return digit;
   if (std::islower(c)) return lowercase;
   if (std::isupper(c)) return uppercase;
-  LOG(FATAL) << "unexpected char: " << c;
+  DVC_FATAL("unexpected char: ", c);
 }
 
 std::vector<std::string_view> split_identifier_view(
@@ -74,32 +73,32 @@ std::string to_underscore_style(const std::vector<std::string_view>& s) {
 }
 
 std::string translate_enumeration_name(std::string_view name) {
-  CHECK(name.substr(0, 2) == "Vk") << name;
+  DVC_ASSERT(name.substr(0, 2) == "Vk", name);
   return to_underscore_style(split_identifier_view(name.substr(2)));
 }
 
 std::string translate_bitmask_name(std::string_view name) {
-  CHECK(name.substr(0, 2) == "Vk") << name;
+  DVC_ASSERT(name.substr(0, 2) == "Vk", name);
   return to_underscore_style(split_identifier_view(name.substr(2)));
 }
 
 std::string translate_handle_name(std::string_view name) {
-  CHECK(name.substr(0, 2) == "Vk") << name;
+  DVC_ASSERT(name.substr(0, 2) == "Vk", name);
   return to_underscore_style(split_identifier_view(name.substr(2)));
 }
 
 std::string translate_struct_name(std::string_view name) {
-  CHECK(name.substr(0, 2) == "Vk") << name;
+  DVC_ASSERT(name.substr(0, 2) == "Vk", name);
   return to_underscore_style(split_identifier_view(name.substr(2)));
 }
 
 std::string translate_enumerator_name(const std::string& name) {
-  CHECK(name.substr(0, 3) == "VK_") << name;
+  DVC_ASSERT(name.substr(0, 3) == "VK_", name);
   return to_underscore_style(split_identifier_view(name.substr(3)));
 }
 
 std::string translate_command_name(const std::string& name) {
-  CHECK(name.substr(0, 2) == "vk") << name;
+  DVC_ASSERT(name.substr(0, 2) == "vk", name);
   return to_underscore_style(split_identifier_view(name.substr(2)));
 }
 
@@ -131,11 +130,11 @@ std::string common_prefix(const std::vector<std::string>& names) {
     for (size_t j = 1; j < names.size(); j++)
       if (c != names[j][i]) return names[0].substr(0, i);
   }
-  LOG(FATAL) << "prefix not proper: " << names[0];
+  DVC_FATAL("prefix not proper: ", names[0]);
 }
 
 // std::string translate_constant_name(const std::string& name) {
-//  CHECK(name.substr(0, 3) == "VK_") << name;
+//  DVC_ASSERT(name.substr(0, 3) == "VK_") << name;
 //  return name.substr(3);
 //}
 
@@ -183,7 +182,7 @@ const vks::Type* translate_member_type(const vks::Registry& vreg,
     } else if (dynamic_cast<vks::FunctionPrototype*>(name->entity)) {
       return name;
     } else {
-      LOG(FATAL) << "Unknown entity sublass: " << typeid(*name->entity).name();
+      DVC_FATAL("Unknown entity sublass: ", typeid(*name->entity).name());
     }
 
     if (entity != nullptr) {
@@ -207,7 +206,7 @@ const vks::Type* translate_member_type(const vks::Registry& vreg,
     T->T = translate_member_type(vreg, sreg, array->T);
     return T;
   } else {
-    LOG(FATAL) << "unknown vks::Type* subclass: " << typeid(*vtype).name();
+    DVC_FATAL("unknown vks::Type* subclass: ", typeid(*vtype).name());
   }
 }
 
@@ -397,10 +396,10 @@ void build_struct(sps::Registry& sreg, const vks::Registry& vreg) {
         structs_done.push_back(struct_);
       }
     }
-    if (structs_done.empty()) LOG(FATAL) << "Circular dependency in structs";
+    if (structs_done.empty()) DVC_FATAL("Circular dependency in structs");
     sort_on_name(structs_done);
     for (sps::Struct* struct_ : structs_done) {
-      CHECK(todo_structs.erase(struct_));
+      DVC_ASSERT(todo_structs.erase(struct_));
       sreg.structs.push_back(struct_);
     }
   }
@@ -673,12 +672,12 @@ sps::MemberFunction* classify_command(sps::Registry& sreg,
   clas->name = command->name;
   clas->command = command;
 
-  CHECK(command->params.size() >= 1);
+  DVC_ASSERT(command->params.size() >= 1);
   std::string name = command->name;
   const sps::Handle* dispatch_handle = get_handle(command->params.at(0).stype);
   if (!dispatch_handle && manual_translation_commands.count(name))
     return nullptr;
-  CHECK(dispatch_handle) << name;
+  DVC_ASSERT(dispatch_handle, name);
   const sps::Handle* second_handle = nullptr;
   if (command->params.size() > 1) {
     second_handle = get_handle(command->params.at(1).stype);
@@ -705,7 +704,7 @@ sps::MemberFunction* classify_command(sps::Registry& sreg,
 
   for (const auto& manual_translation : sps::Registry::manual_translations)
     if (manual_translation.command == name) {
-      CHECK(!manual_translation_commands.count(name)) << name;
+      DVC_ASSERT(!manual_translation_commands.count(name), name);
       clas->manual_translation = manual_translation;
       return clas;
     }
@@ -713,10 +712,10 @@ sps::MemberFunction* classify_command(sps::Registry& sreg,
   if (manual_translation_commands.count(name)) return nullptr;
 
   if (dvc::startswith(name, "destroy_")) {
-    CHECK_EQ(name, "destroy_" + clas->main_handle->fullname);
+    DVC_ASSERT_EQ(name, "destroy_" + clas->main_handle->fullname);
     sps::Handle* handle = dvc::find_or_die(sreg.handles, clas->main_handle);
-    CHECK(handle->destructor == nullptr)
-        << name << " " << handle->destructor->name;
+    DVC_ASSERT(handle->destructor == nullptr, name, " ",
+               handle->destructor->name);
     handle->destructor = command;
     handle->destructor_parent = bool(second_handle);
     return nullptr;
@@ -737,30 +736,30 @@ sps::MemberFunction* classify_command(sps::Registry& sreg,
     }
     nonconst_params.push_back(i);
   }
-  CHECK(nonconst_params.size() < 2) << name;
+  DVC_ASSERT(nonconst_params.size() < 2, name);
   if (!nonconst_params.empty()) {
-    CHECK_EQ(nonconst_params.at(0), command->params.size() - 1) << name;
+    DVC_ASSERT_EQ(nonconst_params.at(0), command->params.size() - 1, name);
     const sps::Param& last_param = command->params.back();
     if (last_param.param->len) {
       if (command->params.at(command->params.size() - 2).name !=
           last_param.param->len.value())
-        LOG(FATAL) << last_param.param->len.value() << " " << name;
+        DVC_FATAL(last_param.param->len.value(), " ", name);
       else {
         if (command->resultvec_incomplete(clas->sz, clas->res)) {
           clas->resultvec_incomplete = true;
         } else if (command->resultvec_void(clas->sz, clas->res)) {
           clas->resultvec_void = true;
         } else {
-          LOG(FATAL) << "resultvec: " << name;
+          DVC_FATAL("resultvec: ", name);
         }
       }
     } else {
-      CHECK(!last_param.param->get_optional(0)) << name;
-      CHECK(command->sreturn_type->to_string() == "void")
-          << command->sreturn_type->to_string() << " " << name;
+      DVC_ASSERT(!last_param.param->get_optional(0), name);
+      DVC_ASSERT(command->sreturn_type->to_string() == "void",
+                 command->sreturn_type->to_string(), " ", name);
       clas->result = true;
       clas->res = sps::get_pointee(last_param.stype);
-      CHECK(clas->res);
+      DVC_ASSERT(clas->res);
     }
   }
 
@@ -774,8 +773,7 @@ sps::MemberFunction* classify_command(sps::Registry& sreg,
   for (const sps::Param& param : command->params)
     if (param.param->len)
       if (!param_names.count(param.param->len.value()))
-        LOG(ERROR) << name << " " << param.name << " "
-                   << param.param->len.value();
+        DVC_ERROR(name, " ", param.name, " ", param.param->len.value());
 
   std::map<size_t, std::vector<size_t>> szptr_pairs;
 
@@ -803,8 +801,8 @@ sps::MemberFunction* classify_command(sps::Registry& sreg,
 void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
   for (const sps::Enumeration* enumeration : sreg.enumerations) {
     if (enumeration->name != "result") continue;
-    CHECK_EQ(enumeration->enumerators.size(),
-             enumeration->enumeration->enumerators.size());
+    DVC_ASSERT_EQ(enumeration->enumerators.size(),
+                  enumeration->enumeration->enumerators.size());
     for (size_t i = 0; i < enumeration->enumerators.size(); i++) {
       sreg.codemap[enumeration->enumeration->enumerators.at(i)] =
           &(enumeration->enumerators.at(i));
@@ -833,7 +831,7 @@ void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
       scommand->successcodes.push_back(sreg.codemap.at(successcode));
 
     if (scommand->successcodes.size() == 1) {
-      CHECK(scommand->command->return_type->to_string() == "VkResult");
+      DVC_ASSERT(scommand->command->return_type->to_string() == "VkResult");
       auto e = new vks::Entity;
       e->name = "void";
       auto n = new vks::Name;
@@ -882,7 +880,7 @@ void build_command(sps::Registry& sreg, const vks::Registry& vreg) {
 
   for (const sps::Handle* handle : sreg.handles) {
     if (handle->destructor == nullptr)
-      LOG(ERROR) << "no destructor: " << handle->fullname;
+      DVC_ERROR("no destructor: ", handle->fullname);
   }
 
   for (sps::Handle* handle : sreg.handles) {
