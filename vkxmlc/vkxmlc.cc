@@ -1,10 +1,10 @@
-#include <gflags/gflags.h>
 #include <iostream>
 #include <set>
 #include <unordered_set>
 
 #include "dvc/container.h"
 #include "dvc/file.h"
+#include "dvc/opts.h"
 #include "dvc/string.h"
 
 #include "sps/sps.h"
@@ -13,13 +13,13 @@
 #include "vks/vksparser.h"
 #include "vks/vulkan_relaxng.h"
 
-DEFINE_string(vkxml, "", "Input vk.xml file");
-DEFINE_string(outjson, "", "Output AST to json");
-DEFINE_string(outtest, "", "Output test of API");
-DEFINE_string(outh, "", "Output C++ header");
+std::string DVC_OPTION(vkxml, -, "", "Input vk.xml file");
+std::string DVC_OPTION(outjson, -, "", "Output AST to json");
+std::string DVC_OPTION(outtest, -, "", "Output test of API");
+std::string DVC_OPTION(outh, -, "", "Output C++ header");
 
 void write_test(const vks::Registry& registry) {
-  dvc::file_writer test(FLAGS_outtest, dvc::truncate);
+  dvc::file_writer test(outtest, dvc::truncate);
 
   test.println("#include \"test/vkxmltest.h\"");
 
@@ -85,7 +85,7 @@ void write_test(const vks::Registry& registry) {
 }
 
 void write_header(const sps::Registry& registry) {
-  dvc::file_writer h(FLAGS_outh, dvc::truncate);
+  dvc::file_writer h(outh, dvc::truncate);
 
   h.println("#pragma once");
   h.println();
@@ -794,33 +794,32 @@ inline std::unique_ptr<spk::device_dispatch_table> load_device_dispatch_table(
 }
 
 int main(int argc, char** argv) {
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  dvc::init_options(argc, argv);
 
-  DVC_ASSERT(!FLAGS_vkxml.empty(), "--vkxml required");
+  DVC_ASSERT(!vkxml.empty(), "--vkxml required");
 
   tinyxml2::XMLDocument doc;
-  DVC_ASSERT(doc.LoadFile(FLAGS_vkxml.c_str()) == tinyxml2::XML_SUCCESS,
-             "Unable to parse ", FLAGS_vkxml);
+  DVC_ASSERT(doc.LoadFile(vkxml.c_str()) == tinyxml2::XML_SUCCESS,
+             "Unable to parse ", vkxml);
 
   auto start = relaxng::parse<vkr::start>(doc.RootElement());
 
-  if (!FLAGS_outjson.empty()) {
-    dvc::file_writer fw(FLAGS_outjson, dvc::truncate);
+  if (!outjson.empty()) {
+    dvc::file_writer fw(outjson, dvc::truncate);
     dvc::json_writer jw(fw.ostream());
     write_json(jw, start);
   }
 
   vks::Registry vksregistry = parse_registry(start);
 
-  if (!FLAGS_outtest.empty()) write_test(vksregistry);
+  if (!outtest.empty()) write_test(vksregistry);
 
-  if (!FLAGS_outh.empty()) {
+  if (!outh.empty()) {
     sps::Registry spsregistry = build_spock_registry(vksregistry);
 
     write_header(spsregistry);
     DVC_ASSERT_EQ(
-        0,
-        std::system(
-            ("/usr/bin/clang-format -i -style=Google " + FLAGS_outh).c_str()));
+        0, std::system(
+               ("/usr/bin/clang-format -i -style=Google " + outh).c_str()));
   }
 }

@@ -138,6 +138,7 @@ cc_binary(
     ],
     deps = [
         "//dvc:file",
+        "//dvc:opts",
         "//dvc:terminate",
         "//spk:spock",
     ],

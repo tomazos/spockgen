@@ -16,12 +16,12 @@ cc_binary(
         "relaxngc.cc",
     ],
     linkopts = [
-        "-lgflags",
         "-lstdc++fs",
     ],
     deps = [
         "//dvc:file",
         "//dvc:json",
+        "//dvc:opts",
         "//dvc:parser",
         "//dvc:scanner",
     ],

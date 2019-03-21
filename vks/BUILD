@@ -8,7 +8,7 @@ genrule(
     outs = [
         "vulkan_relaxng.h",
     ],
-    cmd = "$(location //relaxng:relaxngc) --namespace vkr --protocol Vulkan82 --schema $(location //data:registry.rnc) --hout $(location vulkan_relaxng.h)",
+    cmd = "$(location //relaxng:relaxngc) --namespace_ vkr --protocol Vulkan82 --schema $(location //data:registry.rnc) --hout $(location vulkan_relaxng.h)",
     tools = [
         "//relaxng:relaxngc",
     ],

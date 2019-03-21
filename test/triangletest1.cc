@@ -1,6 +1,5 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
-#include <gflags/gflags.h>
 #include <algorithm>
 #include <filesystem>
 #include <functional>
@@ -8,6 +7,7 @@
 
 #include "dvc/file.h"
 #include "dvc/log.h"
+#include "dvc/opts.h"
 #include "dvc/terminate.h"
 #include "spk/loader.h"
 #include "spk/spock.h"
@@ -65,11 +65,11 @@ void setup_sdl() {
   if (SDL_Init(SDL_INIT_VIDEO) != 0) DVC_FATAL(SDL_GetError());
 }
 
-DEFINE_bool(fullscreen, false, "use a fullscreen window");
+bool DVC_OPTION(fullscreen, -, false, "use a fullscreen window");
 
 SDL_Window* create_window() {
   SDL_Window* window =
-      FLAGS_fullscreen
+      fullscreen
           ? SDL_CreateWindow("triangletest", SDL_WINDOWPOS_UNDEFINED,
                              SDL_WINDOWPOS_UNDEFINED, 0, 0,
                              SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_VULKAN)
@@ -749,7 +749,7 @@ void triangle_test() {
 }  // namespace
 
 int main(int argc, char** argv) {
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  dvc::init_options(argc, argv);
   dvc::install_terminate_handler();
 
   triangle_test();

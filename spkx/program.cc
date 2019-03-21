@@ -1,9 +1,9 @@
 #include <SDL2/SDL_vulkan.h>
-#include <gflags/gflags.h>
 #include <functional>
 #include <set>
 
 #include "dvc/log.h"
+#include "dvc/opts.h"
 #include "dvc/terminate.h"
 #include "program.h"
 
@@ -259,15 +259,12 @@ spk::device create_device(spk::physical_device& physical_device,
 namespace spkx {
 
 program::global::global(int argc, char** argv) {
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  dvc::init_options(argc, argv);
   dvc::install_terminate_handler();
   init_sdl();
 }
 
-program::global::~global() {
-  shutdown_sdl();
-  gflags::ShutDownCommandLineFlags();
-}
+program::global::~global() { shutdown_sdl(); }
 
 program::program(int argc, char** argv)
     : global_(argc, argv),

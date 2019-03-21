@@ -1,14 +1,13 @@
-#include <gflags/gflags.h>
 #include <png++/png.hpp>
 
 #include "dvc/log.h"
+#include "dvc/opts.h"
 #include "dvc/program.h"
-
 #include "ft/face.h"
 #include "ft/glyph.h"
 #include "ft/library.h"
 
-DEFINE_string(font, "", "font to use");
+std::string DVC_OPTION(font, -, "", "font to use");
 
 // struct FontImage {
 //  glm::ivec2 disp;
@@ -36,16 +35,16 @@ void visit_glyph(uint64_t code, uint32_t index, int top, int left,
 int main(int argc, char** argv) {
   dvc::program program(argc, argv);
 
-  std::string target = program.args.at(0);
+  std::string target = dvc::args.at(0);
 
   DVC_ASSERT(!target.empty(), "usage: fonttest <outimg>");
-  DVC_ASSERT(!FLAGS_font.empty(), "set --font");
+  DVC_ASSERT(!font.empty(), "set --font");
 
   png::image<png::gray_pixel> image(1000, 1000);
 
   ft::library library;
 
-  ft::face face(library, FLAGS_font, 0 /*face_index*/);
+  ft::face face(library, font, 0 /*face_index*/);
 
   for (const auto& [code, index] : face.get_char_code_indexs()) {
     face.set_pixel_size(20, 20);

@@ -1,18 +1,19 @@
-#include <gflags/gflags.h>
 #include <map>
 
 #include "makeimage/makeimage.h"
 
-DEFINE_uint64(numiters, 0, "num ran walk iters");
+#include "dvc/opts.h"
+
+uint64_t DVC_OPTION(numiters, n, 0, "num ran walk iters");
 
 int main(int argc, char** argv) {
   ImageMaker image_maker(argc, argv);
 
   std::map<int64_t, double> m0 = {{0, 1}};
 
-  DVC_ASSERT(FLAGS_numiters > 0, "set --numiters");
+  DVC_ASSERT(numiters > 0, "set --numiters");
 
-  for (uint64_t i = 0; i < FLAGS_numiters; ++i) {
+  for (uint64_t i = 0; i < numiters; ++i) {
     std::map<int64_t, double> m1;
     for (const auto& [pos, weight] : m0) {
       m1[pos + 1] += weight / 2;

@@ -1,6 +1,5 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
-#include <gflags/gflags.h>
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -19,11 +18,12 @@
 #include "spkx/game.h"
 // #include "spk/rendering.h"
 #include "dvc/log.h"
+#include "dvc/opts.h"
 
 namespace {
 
-DEFINE_bool(trace_allocations, false, "trace vulkan allocations");
-DEFINE_uint64(num_points, 100, "num of points");
+bool DVC_OPTION(trace_allocations, -, false, "trace vulkan allocations");
+uint64_t DVC_OPTION(num_points, -, 100, "num of points");
 
 struct Pipeline {
   //  spk::shader_module vertex_shader, fragment_shader;
@@ -90,7 +90,7 @@ get_vertex_input_attribute_descriptions() {
 
 spk::buffer create_buffer(spk::device& device) {
   spk::buffer_create_info buffer_create_info;
-  buffer_create_info.set_size(sizeof(Vertex) * FLAGS_num_points);
+  buffer_create_info.set_size(sizeof(Vertex) * num_points);
   buffer_create_info.set_usage(spk::buffer_usage_flags::vertex_buffer);
   buffer_create_info.set_sharing_mode(spk::sharing_mode::exclusive);
   return device.create_buffer(buffer_create_info);
@@ -126,7 +126,7 @@ spk::device_memory create_memory(spk::physical_device& physical_device,
 }
 
 struct World {
-  World(size_t num_points) : num_points(num_points), points(FLAGS_num_points) {
+  World(size_t num_points) : num_points(num_points), points(num_points) {
     rng.seed(std::random_device()());
 
     for (size_t i = 0; i < num_points; ++i) {
@@ -255,7 +255,7 @@ struct PointTest : spkx::game {
 
   PointTest(int argc, char** argv)
       : spkx::game(argc, argv),
-        world(FLAGS_num_points),
+        world(num_points),
         pipeline(create_pipeline(device(), presenter())),
         buffers(create_vertex_buffers(num_renderings(), physical_device(),
                                       device())) {}
@@ -284,7 +284,7 @@ struct PointTest : spkx::game {
     spk::buffer_ref buffer_ref = current_buffer.buffer;
     uint64_t offset = 0;
     command_buffer.bind_vertex_buffers(0, 1, &buffer_ref, &offset);
-    command_buffer.draw(FLAGS_num_points, 1, 0, 0);
+    command_buffer.draw(num_points, 1, 0, 0);
     command_buffer.end_render_pass();
   }
 

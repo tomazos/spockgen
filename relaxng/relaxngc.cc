@@ -1,4 +1,3 @@
-#include <gflags/gflags.h>
 #include <rapidjson/ostreamwrapper.h>
 #include <rapidjson/writer.h>
 #include <experimental/filesystem>
@@ -11,6 +10,7 @@
 
 #include "dvc/file.h"
 #include "dvc/json.h"
+#include "dvc/opts.h"
 #include "dvc/parser.h"
 #include "dvc/scanner.h"
 
@@ -756,8 +756,9 @@ ast::Schema parse_schema(const std::filesystem::path& schema_path) {
   return parser.parse_schema();
 }
 
-DEFINE_string(namespace, "relaxnggen", "namespace to put generated code in");
-DEFINE_string(protocol, "", "protocol name");
+std::string DVC_OPTION(namespace_, -, "relaxnggen",
+                       "namespace to put generated code in");
+std::string DVC_OPTION(protocol, -, "", "protocol name");
 
 void generate_relaxng_parser(const std::filesystem::path& schema_file,
                              const std::filesystem::path& hout) {
@@ -922,9 +923,9 @@ outer_loop:
   w.println();
   w.println("#include \"relaxng/relaxng.h\"");
   w.println();
-  w.println("namespace ", FLAGS_namespace, " {");
+  w.println("namespace ", namespace_, " {");
   w.println();
-  w.println("struct ", FLAGS_protocol, "{};");
+  w.println("struct ", protocol, "{};");
   w.println();
 
   for (const StructDesign& struct_design : struct_designs_depord) {
@@ -937,12 +938,12 @@ outer_loop:
     w.println();
   }
   w.println();
-  w.println("}  // namespace ", FLAGS_namespace);
+  w.println("}  // namespace ", namespace_);
   w.println();
   w.println("namespace relaxng {");
   w.println();
 
-  std::string protocol_qname = "::" + FLAGS_namespace + "::" + FLAGS_protocol;
+  std::string protocol_qname = "::" + namespace_ + "::" + protocol;
 
   w.println("template<>");
   w.println("struct ProtocolReflection<", protocol_qname, "> {");
@@ -954,8 +955,7 @@ outer_loop:
   for (size_t class_index = 0; class_index < struct_designs_depord.size();
        class_index++) {
     const StructDesign& struct_design = struct_designs_depord.at(class_index);
-    std::string class_qname =
-        "::" + FLAGS_namespace + "::" + struct_design.name;
+    std::string class_qname = "::" + namespace_ + "::" + struct_design.name;
 
     w.println("template<>");
     w.println("struct ProtocolClassReflection<", protocol_qname, ", ",
@@ -1015,15 +1015,13 @@ outer_loop:
   //  w.println();
 }
 
-DEFINE_string(schema, "", "The input compact relaxng schema file");
-DEFINE_string(hout, "", "The output generated C++ .h file");
+std::filesystem::path DVC_OPTION(schema, -, dvc::required,
+                                 "The input compact relaxng schema file");
+std::filesystem::path DVC_OPTION(hout, -, dvc::required,
+                                 "The output generated C++ .h file");
 
 int main(int argc, char** argv) {
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
-  if (FLAGS_schema.empty()) DVC_FATAL("--schema required");
-  if (FLAGS_protocol.empty()) DVC_FATAL("--protocol required");
-  std::filesystem::path schema = FLAGS_schema;
+  dvc::init_options(argc, argv);
   if (!exists(schema)) DVC_FATAL("File not found: ", schema);
-  std::filesystem::path hout = FLAGS_hout;
   generate_relaxng_parser(schema, hout);
 }

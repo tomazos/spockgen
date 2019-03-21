@@ -13,6 +13,7 @@ cc_binary(
     deps = [
         "//dvc:container",
         "//dvc:file",
+        "//dvc:opts",
         "//dvc:parser",
         "//dvc:string",
         "//sps",

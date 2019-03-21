@@ -25,6 +25,7 @@ cc_library(
     ],
     deps = [
         "//dvc:file",
+        "//dvc:opts",
         "//dvc:terminate",
         "//spk:spock",
     ],

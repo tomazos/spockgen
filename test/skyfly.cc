@@ -2,7 +2,6 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
-#include <gflags/gflags.h>
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -17,6 +16,7 @@
 #include <iostream>
 #include "dvc/file.h"
 #include "dvc/log.h"
+#include "dvc/opts.h"
 #include "dvc/terminate.h"
 #include "spk/loader.h"
 #include "spk/spock.h"
@@ -26,8 +26,8 @@
 
 namespace {
 
-DEFINE_bool(trace_allocations, false, "trace vulkan allocations");
-DEFINE_uint64(num_points, 100, "num of points");
+bool DVC_OPTION(trace_allocations, -, false, "trace vulkan allocations");
+uint64_t DVC_OPTION(num_points, -, 100, "num of points");
 
 struct Pipeline {
   //  spk::shader_module vertex_shader, fragment_shader;
@@ -196,7 +196,7 @@ struct VertexBuffer {
 VertexBuffer create_vertex_buffer(spk::physical_device& physical_device,
                                   spk::device& device) {
   spk::buffer buffer =
-      spkx::create_buffer(device, sizeof(Vertex) * FLAGS_num_points,
+      spkx::create_buffer(device, sizeof(Vertex) * num_points,
                           spk::buffer_usage_flags::vertex_buffer);
   const spk::memory_requirements memory_requirements =
       buffer.memory_requirements();
@@ -322,12 +322,12 @@ struct ImageBuffer {
 //
 //  image.get_pixbuf();
 //  spk::buffer buffer =
-//      spkx::create_buffer(device, sizeof(Vertex) * FLAGS_num_points,
+//      spkx::create_buffer(device, sizeof(Vertex) * num_points,
 //                          spk::buffer_usage_flags::transfer_src);
 //  const spk::memory_requirements memory_requirements =
 //      buffer.memory_requirements();
 //  spk::device_memory device_memory = spkx::create_memory(
-//      device, sizeof(Vertex) * FLAGS_num_points,
+//      device, sizeof(Vertex) * num_points,
 //      spkx::find_compatible_memory_type(
 //          physical_device, memory_requirements.memory_type_bits(),
 //          spk::memory_property_flags::host_visible |
@@ -350,7 +350,7 @@ struct SkyFly : spkx::game {
 
   SkyFly(int argc, char** argv)
       : spkx::game(argc, argv),
-        world(FLAGS_num_points),
+        world(num_points),
         descriptor_set_layout(create_descriptor_set_layout(device())),
         pipeline_layout(
             create_pipeline_layout(device(), descriptor_set_layout)),
@@ -418,7 +418,7 @@ struct SkyFly : spkx::game {
     command_buffer.bind_descriptor_sets(spk::pipeline_bind_point::graphics,
                                         pipeline_layout, 0,
                                         {&descriptor_set_ref, 1}, {nullptr, 0});
-    command_buffer.draw(FLAGS_num_points, 1, 0, 0);
+    command_buffer.draw(num_points, 1, 0, 0);
     command_buffer.end_render_pass();
   }
 
