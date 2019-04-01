@@ -651,7 +651,6 @@ class SchemaParser : public dvc::parser<Token> {
     DVC_ASSERT_EQ(pop(), Token::IDENTIFIER);
     DVC_ASSERT_EQ(pop(), Token::EQUALS);
     DVC_ASSERT_EQ(pop(), Token::STRING);
-    DVC_LOG(peek());
   }
 
   std::pair<std::string, ast::PPattern> parse_production() {
