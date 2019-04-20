@@ -654,6 +654,7 @@ std::map<std::string, std::string> handle_parents = {
     {"event", "device"},
     {"query_pool", "device"},
     {"image", "device"},
+    {"image_view", "device"},
     {"pipeline_layout", "device"},
     {"pipeline", "device"},
     {"command_buffer", "device"}};
@@ -712,7 +713,7 @@ sps::MemberFunction* classify_command(sps::Registry& sreg,
   if (manual_translation_commands.count(name)) return nullptr;
 
   if (dvc::startswith(name, "destroy_")) {
-    DVC_ASSERT_EQ(name, "destroy_" + clas->main_handle->fullname);
+    DVC_ASSERT_EQ(name, "destroy_" + clas->main_handle->fullname, clas->name);
     sps::Handle* handle = dvc::find_or_die(sreg.handles, clas->main_handle);
     DVC_ASSERT(handle->destructor == nullptr, name, " ",
                handle->destructor->name);

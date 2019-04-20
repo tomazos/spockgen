@@ -3,13 +3,13 @@ package(default_visibility = ["//visibility:public"])
 genrule(
     name = "spock_generate",
     srcs = [
-        "//data:vk97.xml",
+        "//data:vk101.xml",
     ],
     outs = [
         "spock.h",
     ],
     cmd = "$(location //vkxmlc) " +
-          "--vkxml $(location //data:vk97.xml) " +
+          "--vkxml $(location //data:vk101.xml) " +
           "--outh $(location spock.h)",
     tools = [
         "//vkxmlc",
