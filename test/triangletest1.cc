@@ -1,8 +1,10 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
+
 #include <algorithm>
 #include <filesystem>
 #include <functional>
+#include <iostream>
 #include <set>
 
 #include "dvc/file.h"
@@ -11,8 +13,6 @@
 #include "dvc/terminate.h"
 #include "spk/loader.h"
 #include "spk/spock.h"
-
-#include <iostream>
 
 namespace spk {
 using debug_utils_messenger_callback =

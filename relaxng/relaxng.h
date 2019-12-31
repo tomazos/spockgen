@@ -1,10 +1,10 @@
 #pragma once
 
+#include <tinyxml2.h>
+
 #include <optional>
 #include <string>
 #include <vector>
-
-#include <tinyxml2.h>
 
 #include "dvc/json.h"
 

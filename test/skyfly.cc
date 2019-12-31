@@ -2,6 +2,7 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
+
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -9,11 +10,11 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/rotate_vector.hpp>
+#include <iostream>
 #include <png++/png.hpp>
 #include <random>
 #include <set>
 
-#include <iostream>
 #include "dvc/file.h"
 #include "dvc/log.h"
 #include "dvc/opts.h"

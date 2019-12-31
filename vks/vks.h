@@ -22,6 +22,9 @@ struct Entity {
 
 struct Type {
   virtual std::string to_string() const = 0;
+  virtual std::string to_string(const std::string& name) const {
+    return to_string() + " " + name;
+  }
   virtual bool is_empty_enum() const { return false; }
   virtual std::string make_declaration(const std::string& id,
                                        bool zero = true) const {
@@ -96,6 +99,9 @@ struct Array : Type {
   std::string to_string() const override {
     return T->to_string() + " [" + N->to_string() + "]";
   };
+  std::string to_string(const std::string& name) const override {
+    return T->to_string() + " " + name + "[" + N->to_string() + "]";
+  };
   std::string make_declaration(const std::string& id,
                                bool zero = true) const override {
     return "std::array<" + T->to_string() + ", " + N->to_string() + "> " + id +
@@ -123,6 +129,7 @@ struct Constant : Entity {
 struct Enumeration : Entity {
   std::string zeroinit() const override { return "= " + name + "(0)"; }
   std::vector<const Constant*> enumerators;
+  const Platform* platform = nullptr;
   bool is_empty_enum() const override { return enumerators.empty(); }
 };
 
@@ -199,12 +206,13 @@ struct Command : Entity {
   std::vector<const Constant*> successcodes;
   std::vector<const Constant*> errorcodes;
 
-  std::string to_type_string() {
+  std::string to_type_string(bool with_name = false) const {
     std::ostringstream oss;
-    oss << return_type->to_string() << " (*)(";
+    oss << return_type->to_string() << " (*" << (with_name ? name : "") << ")(";
     for (size_t i = 0; i < params.size(); i++) {
       if (i != 0) oss << ", ";
-      oss << params[i].type->to_string();
+      oss << (with_name ? params[i].type->to_string(params[i].name)
+                        : params[i].type->to_string());
     }
     oss << ")";
     return oss.str();

@@ -1,14 +1,15 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
+
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <glm/glm.hpp>
+#include <iostream>
 #include <random>
 #include <set>
 
-#include <iostream>
 #include "dvc/file.h"
 #include "dvc/terminate.h"
 #include "spk/loader.h"

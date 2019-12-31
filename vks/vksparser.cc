@@ -161,8 +161,11 @@ void parse_enumerations(vks::Registry& registry, const vkr::start& start) {
   for (const vkr::Enums& enums : start.enums) {
     DVC_ASSERT(enums.name);
     std::string name = enums.name.value();
-    if (name == "API Constants" || name == "VkRenderPassCreateFlagBits")
+    if (name == "API Constants") continue;
+    if (!types.count(name)) {
+      DVC_LOG("no type enum: ", name);
       continue;
+    }
     DVC_ASSERT(types.count(name));
     DVC_ASSERT(enums.type, enums.name.value());
     const vkr::Type& type = (*types.at(name));
@@ -187,6 +190,18 @@ void parse_enumerations(vks::Registry& registry, const vkr::start& start) {
       dvc::insert_or_die(registry.enumerations, name,
                          registry.enumerations.at(type.alias.value()));
     }
+
+  foreach_extension(
+      registry, start, [&](auto require, auto extnumber, auto platform) {
+        for (const auto& type : require.type) {
+          if (registry.enumerations.count(type.name)) {
+            registry.enumerations.at(type.name)->platform = platform;
+            for (auto& constant :
+                 registry.enumerations.at(type.name)->enumerators)
+              registry.constants.at(constant->name)->platform = platform;
+          }
+        }
+      });
 }
 
 void parse_bitmasks(vks::Registry& registry, const vkr::start& start) {
@@ -376,7 +391,8 @@ void parse_structs(vks::Registry& registry, TypeBackpatches& backpatches,
     for (size_t member_idx = 0; member_idx < type.member.size(); member_idx++) {
       const vkr::Type_member& member_in = type.member.at(member_idx);
       vks::Member member_out;
-      member_out.name = member_in.name;
+      DVC_ASSERT(member_in.name.has_value());
+      member_out.name = member_in.name.value();
       if (member_in.values) {
         DVC_ASSERT(member_idx == 0);
         DVC_ASSERT(member_in.name == "sType");
@@ -409,7 +425,7 @@ void parse_structs(vks::Registry& registry, TypeBackpatches& backpatches,
 
       mnc::Declaration decl =
           mnc::parse_declaration(parse_inner_text(member_in._element_));
-      DVC_ASSERT_EQ(member_in.name, decl.name);
+      DVC_ASSERT_EQ(member_in.name.value(), decl.name);
       mnc::Type* member_type = decl.type;
       backpatches.add_struct_member_backpatch(struct_, struct_->members.size(),
                                               member_type);
@@ -495,7 +511,7 @@ void parse_commands(vks::Registry& registry, TypeBackpatches& backpatches,
     for (const vkr::Command_param& param_in : command_in.param) {
       mnc::Declaration decl =
           mnc::parse_declaration(parse_inner_text(param_in._element_));
-      DVC_ASSERT_EQ(decl.name, param_in.name);
+      DVC_ASSERT_EQ(decl.name, param_in.name.value());
       vks::Param param_out;
       param_out.name = decl.name;
 
@@ -676,7 +692,8 @@ void build_dispatch_tables(vks::Registry& registry) {
     if (name != command->name) continue;
     static std::set<std::string> global_command_names = {
         "vkEnumerateInstanceVersion", "vkEnumerateInstanceExtensionProperties",
-        "vkEnumerateInstanceLayerProperties", "vkCreateInstance"};
+        "vkEnumerateInstanceLayerProperties", "vkCreateInstance",
+        "vkGetInstanceProcAddr"};
     if (global_command_names.count(name)) {
       relate_dispatch_table(vks::DispatchTableKind::GLOBAL, command);
       continue;

@@ -1,8 +1,7 @@
 #include <map>
 
-#include "makeimage/makeimage.h"
-
 #include "dvc/opts.h"
+#include "makeimage/makeimage.h"
 
 uint64_t DVC_OPTION(numiters, n, 0, "num ran walk iters");
 

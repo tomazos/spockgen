@@ -261,7 +261,6 @@ class CParser : public dvc::parser<Token> {
         DVC_FATAL(peek());
       case Token::RPAREN:
         incr();
-        [[fallthrough]];
     }
     return function_prototype;
   };

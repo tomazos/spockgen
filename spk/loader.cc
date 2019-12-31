@@ -2,6 +2,7 @@
 
 #include <SDL2/SDL_vulkan.h>
 #include <dlfcn.h>
+
 #include <memory>
 
 #include "dvc/log.h"

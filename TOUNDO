@@ -1,0 +1,8 @@
+ 2318  sudo apt install vulkan-tools
+ 2349  sudo apt install rapidjson-dev 
+ 2351  sudo apt install libfreetype6-dev 
+ 2353  sudo apt install libboost-dev 
+ 2359  sudo apt install libpng++-dev 
+ 2361  sudo apt install libvulkan-dev 
+ 2386  sudo apt install libsdl2-dev 
+
