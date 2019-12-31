@@ -115,8 +115,11 @@ void write_header(const vks::Registry& registry) {
     h.println();
   }
 
+  std::set<std::string> done;
   h.println("// STRUCTURE TYPES");
   for (const auto& [name, struct_] : registry.structs) {
+    if (done.count(struct_->name)) continue;
+    done.insert(struct_->name);
     if (struct_->platform) h.println("#ifdef ", struct_->platform->protect);
     if (struct_->structured_type)
       h.println("DECLARE_VULKAN_STRUCT_TYPE(", struct_->name, ",",
