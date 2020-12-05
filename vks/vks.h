@@ -114,6 +114,27 @@ struct Array : Type {
   virtual bool size_estimate() const { return true; }
 };
 
+struct Bitfield : Type {
+  const Type* T;
+  Expr* N;
+
+  std::string to_string() const override {
+    return T->to_string() + " :" + N->to_string();
+  };
+  std::string to_string(const std::string& name) const override {
+    return T->to_string() + " " + name + " :" + N->to_string();
+  };
+  std::string make_declaration(const std::string& id,
+                               bool zero = true) const override {
+    return T->to_string() + " " + id + " :" + N->to_string();
+  }
+  void get_entity_dep(const Entity*& entity, bool& complete) const override {
+    T->get_entity_dep(entity, complete);
+  }
+  std::string zeroinit() const override { return "= {}"; }
+  virtual bool size_estimate() const { return true; }
+};
+
 struct External : Entity {};
 
 struct Platform {

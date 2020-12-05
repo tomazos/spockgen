@@ -7,6 +7,8 @@
 
 namespace mnc {
 
+std::string current_code;
+
 struct Token {
   enum Kind {
     END,
@@ -27,6 +29,7 @@ struct Token {
     ASTERISK,
     COMMA,
     SEMICOLON,
+    COLON,
   };
 
   Token(Kind kind, size_t line) : kind(kind), line(line){};
@@ -71,6 +74,8 @@ std::string_view token_kind_to_string(Token::Kind kind) {
       return "NUMBER";
     case Token::SEMICOLON:
       return "SEMICOLON";
+    case Token::COLON:
+      return "COLON";
   }
 
   DVC_FATAL("unknown token::kind");
@@ -120,9 +125,9 @@ struct CScanner : dvc::scanner {
 
   Token parse_next_token() {
     static const std::unordered_map<char, Token::Kind> punctuation = {
-        {'[', Token::LBRACK},   {']', Token::RBRACK}, {'*', Token::ASTERISK},
-        {'(', Token::LPAREN},   {')', Token::RPAREN}, {',', Token::COMMA},
-        {';', Token::SEMICOLON}};
+        {'[', Token::LBRACK},    {']', Token::RBRACK}, {'*', Token::ASTERISK},
+        {'(', Token::LPAREN},    {')', Token::RPAREN}, {',', Token::COMMA},
+        {';', Token::SEMICOLON}, {':', Token::COLON}};
 
     static const std::unordered_map<std::string, Token::Kind> keywords = {
         {"const", Token::CONST}, {"struct", Token::STRUCT}};
@@ -166,6 +171,7 @@ class CParser : public dvc::parser<Token> {
 
   Declaration parse_declaration_end() {
     Declaration decl = parse_declaration();
+    if (peek() != Token::END) DVC_FATAL("DIDNT PARSE TO END: ", current_code);
     DVC_ASSERT(peek() == Token::END);
     return decl;
   }
@@ -211,7 +217,7 @@ class CParser : public dvc::parser<Token> {
     DVC_ASSERT(peek() == Token::IDENTIFIER);
     std::string name = pop().spelling;
 
-    if (peek() == Token::LBRACK) {
+    while (peek() == Token::LBRACK) {
       incr();
       Expr* e;
       DVC_ASSERT(peek() == Token::IDENTIFIER || peek() == Token::NUMBER);
@@ -224,6 +230,12 @@ class CParser : public dvc::parser<Token> {
       t = new Array(t, e);
     }
 
+    if (peek() == Token::COLON) {
+      incr();
+      DVC_ASSERT(peek() == Token::NUMBER);
+      Expr* e = new Number(pop().spelling);
+      t = new Bitfield(t, e);
+    }
     return Declaration{name, t};
   };
 
@@ -268,6 +280,7 @@ class CParser : public dvc::parser<Token> {
 
 template <typename F>
 auto parse(const std::string& code, F f) {
+  current_code = code;
   CScanner scanner("vk.xml", code);
   std::vector<Token> tokens;
   while (true) {

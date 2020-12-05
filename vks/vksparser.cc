@@ -580,6 +580,11 @@ vks::Type* translate_type(vks::Registry& registry, mnc::Type* type) {
     result->T = translate_type(registry, array->T);
     result->N = translate_expr(registry, array->N);
     return result;
+  } else if (auto bitfield = dynamic_cast<mnc::Bitfield*>(type)) {
+    auto result = new vks::Bitfield;
+    result->T = translate_type(registry, bitfield->T);
+    result->N = translate_expr(registry, bitfield->N);
+    return result;
   }
   DVC_ERROR("Unknown mnc type: ", typeid(type).name());
   return nullptr;  // ???

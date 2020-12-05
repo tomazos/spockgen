@@ -44,6 +44,12 @@ struct Array : Type {
   Expr* N;
 };
 
+struct Bitfield : Type {
+  Bitfield(Type* T, Expr* N) : T(T), N(N) {}
+  Type* T;
+  Expr* N;
+};
+
 struct Declaration {
   std::string name;
   Type* type;
